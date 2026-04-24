@@ -1,5 +1,6 @@
 from .engines import (
     FrequencySpeculativeEngine,
+    GreedyPrefixCacheEngine,
     NativePrefixCachingEngine,
     NoCacheEngine,
     ReactivePrefixCacheEngine,
@@ -13,6 +14,7 @@ __all__ = [
     'NativePrefixCachingEngine',
     'ReactivePrefixCacheEngine',
     'StrictReactivePrefixCacheEngine',
+    'GreedyPrefixCacheEngine',
     'FrequencySpeculativeEngine',
     'ShadowKVEngine',
     'load_backend',

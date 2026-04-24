@@ -331,5 +331,11 @@ class TieredStateBank:
         n = len(tokens)
         if n <= self.min_match_length:
             return [n]
-        lengths = {self.min_match_length, min(n, 4), min(n, 6), min(n, 8), min(n, 12), min(n, 16), min(n, 24), min(n, 32), n}
+        lengths = {self.min_match_length, n}
+        dense_cap = min(n, 24)
+        lengths.update(range(self.min_match_length, dense_cap + 1))
+        for length in range(32, min(n, 160) + 1, 8):
+            lengths.add(length)
+        for frac in (0.25, 0.5, 0.75):
+            lengths.add(max(self.min_match_length, min(n, int(round(n * frac)))))
         return sorted(length for length in lengths if self.min_match_length <= length <= n)

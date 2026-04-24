@@ -84,6 +84,16 @@ class BaseEngine:
                 promote_after_hits=3,
                 gpu_promotion_max_prefix_tokens=24,
             )
+        if getattr(self.backend, 'backend_name', 'base') == 'hf' and self.backend.device.startswith('cuda'):
+            return EngineTuning(
+                min_store_prefix_tokens=max(getattr(self.backend, 'default_min_store_prefix_tokens', 8), 8),
+                min_reuse_prefix_tokens=max(getattr(self.backend, 'default_min_reuse_prefix_tokens', 8), 8),
+                min_estimated_saved_ms=4.0,
+                max_cacheable_prefix_tokens=128,
+                min_prefix_coverage_ratio=0.15,
+                promote_after_hits=2,
+                gpu_promotion_max_prefix_tokens=64,
+            )
         return EngineTuning(
             min_store_prefix_tokens=max(getattr(self.backend, 'default_min_store_prefix_tokens', 8), 3),
             min_reuse_prefix_tokens=max(getattr(self.backend, 'default_min_reuse_prefix_tokens', 8), 3),
@@ -121,8 +131,15 @@ class BaseEngine:
         attempts = int(self.engine_metrics.get('reuse_attempts', 0))
         successes = int(self.engine_metrics.get('reuse_successes', 0))
         bypassed = int(self.engine_metrics.get('bypassed_matches', 0))
+        store_successes = int(self.engine_metrics.get('store_successes', 0))
         min_requests = int(self.engine_metrics.get('cache_disable_min_requests', 10))
         min_attempts = int(self.engine_metrics.get('cache_disable_min_attempts', 8))
+        bank_snapshot = self.bank.snapshot_metrics()
+        if requests_seen >= 5:
+            all_misses = int(bank_snapshot.get('hits', 0)) == 0 and int(bank_snapshot.get('misses', 0)) >= requests_seen
+            if all_misses and attempts == 0 and store_successes >= 4:
+                self._set_cache_disabled('no_prefix_reuse_early')
+                return
         if requests_seen < min_requests or attempts < min_attempts:
             return
         success_rate = successes / max(attempts, 1)
@@ -458,6 +475,50 @@ class StrictReactivePrefixCacheEngine(ReactivePrefixCacheEngine):
         self.tuning.min_estimated_saved_ms = max(self.tuning.min_estimated_saved_ms, 14.0 if not self.backend.device.startswith('cuda') else 10.0)
 
 
+class GreedyPrefixCacheEngine(ReactivePrefixCacheEngine):
+    def __init__(self, backend: Backend, max_memory_mb: int = 256):
+        super().__init__(backend=backend, max_memory_mb=max_memory_mb)
+        self.name = 'greedy_prefix_cache'
+        self.tuning.min_store_prefix_tokens = self.bank.min_match_length
+        self.tuning.min_reuse_prefix_tokens = self.bank.min_match_length
+        self.tuning.min_estimated_saved_ms = 0.0
+        self.tuning.min_prefix_coverage_ratio = 0.0
+        self.tuning.max_cacheable_prefix_tokens = max(self.tuning.max_cacheable_prefix_tokens, 128)
+
+    def _reactive_prefix_len(self, tokens: Tuple[int, ...]) -> int:
+        return min(len(tokens), self.tuning.max_cacheable_prefix_tokens)
+
+    def _should_store_reactive_prefix(self, tokens: Tuple[int, ...], prefix_len: int) -> bool:
+        self.engine_metrics['store_attempts'] += 1
+        if not getattr(self.backend, 'supports_external_kv', True):
+            self.engine_metrics['store_skips'] += 1
+            return False
+        if len(tokens) < self.bank.min_match_length:
+            self.engine_metrics['store_skips'] += 1
+            return False
+        return True
+
+    def _should_attempt_cache_use(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int) -> bool:
+        if not self.cache_enabled:
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        if not getattr(self.backend, 'supports_external_kv', True):
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        self.engine_metrics['reuse_attempts'] += 1
+        if match_len < self.bank.min_match_length:
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        total_tokens = len(tokens)
+        suffix_len = max(total_tokens - match_len, 0)
+        self.engine_metrics['estimated_tokens_saved_total'] = int(self.engine_metrics.get('estimated_tokens_saved_total', 0)) + int(match_len)
+        self.engine_metrics['saved_latency_estimate_ms'] = float(self.engine_metrics.get('saved_latency_estimate_ms', 0.0)) + float(max(self._estimate_saved_ms(total_tokens, match_len, suffix_len), 0.0))
+        return True
+
+
 class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
     def __init__(self, backend: Backend, max_memory_mb: int = 256, speculative_k: int = 4, idle_threshold_ms: float = 60.0):
         super().__init__(backend=backend, max_memory_mb=max_memory_mb)
@@ -559,7 +620,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         elif self._cpu_mode:
             self._min_requests_before_speculation = 8
         else:
-            self._min_requests_before_speculation = 10
+            self._min_requests_before_speculation = 6
         self._speculation_cooldown_until = 0.0
         self._recent_speculative_net_values: deque[float] = deque(maxlen=6)
         self._recent_request_window: deque[Tuple[int, int, bool]] = deque(maxlen=16 if self._cpu_mode else 12)
@@ -729,6 +790,8 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
             self._effective_speculative_k = 1
         elif self._cpu_mode and (recent_hit_rate >= 0.30 or recent_reuse_density >= 0.10):
             self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
+        elif (not self._cpu_mode) and (recent_hit_rate >= 0.10 or recent_reuse_density >= 0.04):
+            self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
         elif recent_hit_rate < 0.20 and recent_reuse_density < 0.08:
             self._effective_speculative_k = 1
         else:
@@ -752,7 +815,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
             if not self._refresh_speculation_controller():
                 continue
 
-            prefer_gpu = self.enable_gpu_tier and idle_ms >= (self.idle_threshold_ms * 1.5)
+            prefer_gpu = self.enable_gpu_tier and idle_ms >= self.idle_threshold_ms
             decisions = self.policy.rank(self.bank, budget_k=self._effective_speculative_k, prefer_gpu=prefer_gpu)
 
             for decision in decisions:
@@ -765,7 +828,10 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
 
                 out = self.backend.prefill(decision.prefix_tokens)
                 self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
+                recent_streak = self.bank.recent_prefix_streak(decision.prefix_tokens)
                 target_tier = decision.target_tier if prefer_gpu else 'cpu'
+                if self.enable_gpu_tier and recent_streak >= 2:
+                    target_tier = 'gpu'
                 device_target = self._device_target_for_tier(target_tier)
                 cache_obj = out.kv_cache if device_target == self.backend.device else self.backend.move_kv_cache(out.kv_cache, device_target)
 

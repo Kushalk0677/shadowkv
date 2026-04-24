@@ -147,15 +147,18 @@ SYNTHETIC_VARIANTS = {
 }
 
 
-def make_synthetic_workload(variant: str, n_requests: int, seed: int = 42) -> List[Request]:
+def make_synthetic_workload(variant: str, n_requests: int, seed: int = 42, mean_inter_arrival_ms: float | None = None) -> List[Request]:
     if variant not in SYNTHETIC_VARIANTS:
         valid = ', '.join(sorted(SYNTHETIC_VARIANTS.keys()))
         raise ValueError(f'Unknown variant: {variant}. Valid variants: {valid}')
-    generator = SyntheticWorkloadGenerator(seed=seed, **SYNTHETIC_VARIANTS[variant])
+    settings = dict(SYNTHETIC_VARIANTS[variant])
+    if mean_inter_arrival_ms is not None:
+        settings['mean_inter_arrival_ms'] = mean_inter_arrival_ms
+    generator = SyntheticWorkloadGenerator(seed=seed, **settings)
     return generator.generate(n_requests)
 
 
-def make_public_dataset_workload(dataset_name: str, split: str, n_requests: int, seed: int = 42, mean_inter_arrival_ms: float = 60.0) -> List[Request]:
+def make_public_dataset_workload(dataset_name: str, split: str, n_requests: int, seed: int = 42, mean_inter_arrival_ms: float = 150.0) -> List[Request]:
     from .datasets import load_public_text_rows
 
     rows = load_public_text_rows(dataset_name=dataset_name, split=split, limit=n_requests, seed=seed)

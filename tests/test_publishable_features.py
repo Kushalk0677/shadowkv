@@ -44,4 +44,4 @@ def test_reactive_engine_auto_disables_after_repeated_unusable_matches():
         engine.serve_tokens(i, tokens)
     assert engine.cache_enabled is False
     assert engine.engine_metrics['cache_active_final'] is False
-    assert engine.engine_metrics['auto_disabled_reason'] in {'no_usable_reuse', 'net_negative_reuse', 'low_reuse_density'}
+    assert engine.engine_metrics['auto_disabled_reason'] in {'no_usable_reuse', 'net_negative_reuse', 'low_reuse_density', 'no_prefix_reuse_early'}
