@@ -88,15 +88,22 @@ def _profile_shadowkv_costs(backend) -> dict:
 
     latencies = []
     lengths = []
+    if candidate_lengths:
+        warmup_tokens = tuple(tokens[: candidate_lengths[-1]])
+        if warmup_tokens:
+            try:
+                backend.prefill(warmup_tokens)
+            except Exception:
+                pass
     for length in candidate_lengths:
         sample = tuple(tokens[:length])
         if len(sample) < length:
             continue
         timings = []
-        repeats = 2 if backend.device.startswith('cuda') else 1
+        repeats = 4 if backend.device.startswith('cuda') else 2
         for _ in range(repeats):
             timings.append(float(backend.prefill(sample).latency_ms))
-        latencies.append(timings[-1])
+        latencies.append(statistics.median(timings))
         lengths.append(length)
 
     if not lengths:
@@ -108,18 +115,22 @@ def _profile_shadowkv_costs(backend) -> dict:
             'speculation_penalty_ms': max(estimate * 4.0, 2.0),
         }
 
-    slopes = []
-    for idx in range(1, len(lengths)):
-        token_delta = lengths[idx] - lengths[idx - 1]
-        latency_delta = latencies[idx] - latencies[idx - 1]
-        if token_delta > 0:
-            slopes.append(max(latency_delta / token_delta, 0.0))
-    token_benefit_ms = max(statistics.median(slopes) if slopes else (latencies[-1] / max(lengths[-1], 1)), 0.1)
-    intercepts = [lat - token_benefit_ms * length for length, lat in zip(lengths, latencies)]
-    speculation_penalty_ms = max(statistics.median(intercepts) if intercepts else token_benefit_ms * 4.0, 1.0)
+    measured_ms_per_token = [lat / max(length, 1) for length, lat in zip(lengths, latencies)]
+    estimate_slope = (
+        float(backend.estimate_prefill_cost_ms(lengths[-1]) - backend.estimate_prefill_cost_ms(lengths[0]))
+        / max(lengths[-1] - lengths[0], 1)
+    )
+    median_measured = statistics.median(measured_ms_per_token)
+    if backend.device.startswith('cuda'):
+        token_benefit_ms = max(estimate_slope, median_measured * 0.65, 0.20)
+        speculation_penalty_ms = min(max(min(latencies) * 0.20, 2.0), 12.0)
+    else:
+        token_benefit_ms = max(estimate_slope, median_measured * 0.70, 0.35)
+        speculation_penalty_ms = min(max(min(latencies) * 0.25, 4.0), 20.0)
     return {
         'profile_lengths': lengths,
         'profile_latencies_ms': latencies,
+        'profile_ms_per_token': measured_ms_per_token,
         'token_benefit_ms': float(token_benefit_ms),
         'speculation_penalty_ms': float(speculation_penalty_ms),
     }
@@ -138,13 +149,13 @@ def _build_shadowkv_policy_kwargs(backend) -> dict:
             'speculation_penalty_ms': speculation_penalty_ms,
             'memory_penalty_per_mb': 0.75,
             'gpu_bonus_ms': max(speculation_penalty_ms * 0.5, token_benefit_ms * 3.0),
-            'benefit_cost_ratio': 1.05,
+            'benefit_cost_ratio': 0.95,
             'max_admissions_per_idle': 2,
             'min_prefix_len': 16,
             'preferred_prefix_len': 64,
             'max_prefix_len': 192,
             'min_observations': 3,
-            'min_expected_net_ms': max(2.0, speculation_penalty_ms * 0.5),
+            'min_expected_net_ms': max(1.0, speculation_penalty_ms * 0.25),
             'min_recent_support': 0.04,
             'streak_bonus_ms': streak_bonus_ms,
             'weak_recent_penalty_ms': weak_recent_penalty_ms,

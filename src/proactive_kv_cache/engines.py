@@ -135,9 +135,9 @@ class BaseEngine:
         min_requests = int(self.engine_metrics.get('cache_disable_min_requests', 10))
         min_attempts = int(self.engine_metrics.get('cache_disable_min_attempts', 8))
         bank_snapshot = self.bank.snapshot_metrics()
-        if requests_seen >= 5:
+        if requests_seen >= 4:
             all_misses = int(bank_snapshot.get('hits', 0)) == 0 and int(bank_snapshot.get('misses', 0)) >= requests_seen
-            if all_misses and attempts == 0 and store_successes >= 4:
+            if all_misses and attempts == 0 and store_successes >= 3:
                 self._set_cache_disabled('no_prefix_reuse_early')
                 return
         if requests_seen < min_requests or attempts < min_attempts:
