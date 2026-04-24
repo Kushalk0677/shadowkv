@@ -119,7 +119,7 @@ class HuggingFaceBackend(Backend):
 
         load_kwargs = {}
         if model_dtype is not None:
-            load_kwargs['dtype'] = model_dtype
+            load_kwargs['torch_dtype'] = model_dtype
         self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
         self.model.eval()
         self.model.to(device)
