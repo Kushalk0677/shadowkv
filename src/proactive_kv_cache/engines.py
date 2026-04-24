@@ -104,6 +104,9 @@ class BaseEngine:
     def _mark_cache_active(self) -> None:
         self.engine_metrics['cache_active_final'] = bool(self.cache_enabled)
 
+    def _after_record(self, result: RequestResult) -> None:
+        return None
+
     def _on_request_finish(self) -> None:
         self.engine_metrics['requests_seen'] = int(self.engine_metrics.get('requests_seen', 0)) + 1
         self._maybe_auto_disable()
@@ -152,6 +155,7 @@ class BaseEngine:
         self.engine_metrics['recompute_tokens_total'] = int(self.engine_metrics.get('recompute_tokens_total', 0)) + int(result.tokens_recomputed)
         if result.was_cache_hit and result.matched_prefix_length > 0:
             self.engine_metrics['reused_prefix_tokens_total'] = int(self.engine_metrics.get('reused_prefix_tokens_total', 0)) + int(result.matched_prefix_length)
+        self._after_record(result)
         self._on_request_finish()
         self.end_time = time.perf_counter()
         return result
@@ -552,6 +556,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         self._min_requests_before_speculation = 6 if getattr(backend, 'backend_name', 'fake') == 'fake' else 10
         self._speculation_cooldown_until = 0.0
         self._recent_speculative_net_values: deque[float] = deque(maxlen=6)
+        self._recent_request_window: deque[Tuple[int, int, bool]] = deque(maxlen=12)
         self._effective_speculative_k = speculative_k
         self._last_controller_metrics = {
             'speculative_hits': 0,
@@ -565,10 +570,16 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
                 'speculation_paused_ticks': 0,
                 'speculation_enabled_final': True,
                 'effective_speculative_k_final': speculative_k,
+                'recent_reuse_density_final': 0.0,
+                'recent_hit_rate_final': 0.0,
             }
         )
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
+
+    def _after_record(self, result: RequestResult) -> None:
+        total_tokens = max(result.tokens_recomputed + result.matched_prefix_length, 1)
+        self._recent_request_window.append((total_tokens, result.matched_prefix_length, result.was_cache_hit))
 
     def serve_tokens(self, request_id: int, tokens: Tuple[int, ...]) -> RequestResult:
         self.serving_event.set()
@@ -649,7 +660,15 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         if len(decision_prefix) < self.tuning.min_store_prefix_tokens:
             return False
         estimated_cost = self._estimate_full_cost_ms(len(decision_prefix))
-        return decision_benefit_ms >= max(decision_cost_ms, 0.0) and estimated_cost >= self.tuning.min_estimated_saved_ms
+        recent_support = self.bank.recent_prefix_support(decision_prefix)
+        recent_streak = self.bank.recent_prefix_streak(decision_prefix)
+        if recent_support <= 0.0 and recent_streak == 0:
+            return False
+        return (
+            decision_benefit_ms >= max(decision_cost_ms, 0.0)
+            and estimated_cost >= self.tuning.min_estimated_saved_ms
+            and (recent_support >= 0.10 or recent_streak >= 2)
+        )
 
     def _refresh_speculation_controller(self) -> bool:
         now = time.time()
@@ -676,6 +695,14 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         pending_speculative = int(snapshot.get('pending_speculative_entries', 0))
         recent_net = sum(self._recent_speculative_net_values)
         recent_count = len(self._recent_speculative_net_values)
+        recent_total_tokens = sum(total for total, _, _ in self._recent_request_window)
+        recent_reused_tokens = sum(reused for _, reused, _ in self._recent_request_window)
+        recent_hits = sum(1 for _, _, was_hit in self._recent_request_window if was_hit)
+        recent_request_count = len(self._recent_request_window)
+        recent_reuse_density = recent_reused_tokens / max(recent_total_tokens, 1)
+        recent_hit_rate = recent_hits / max(recent_request_count, 1)
+        self.engine_metrics['recent_reuse_density_final'] = float(recent_reuse_density)
+        self.engine_metrics['recent_hit_rate_final'] = float(recent_hit_rate)
 
         if requests_seen < self._min_requests_before_speculation:
             self._effective_speculative_k = 0
@@ -683,9 +710,13 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
             self._effective_speculative_k = 0
         elif pending_speculative >= 1:
             self._effective_speculative_k = 0
+        elif recent_request_count >= 6 and recent_reuse_density < 0.04 and recent_hit_rate < 0.10:
+            self._effective_speculative_k = 0
         elif recent_count >= 2 and recent_net <= 0.0:
             self._effective_speculative_k = 0
         elif recent_count >= 1 and recent_net < 12.0:
+            self._effective_speculative_k = 1
+        elif recent_hit_rate < 0.20 and recent_reuse_density < 0.08:
             self._effective_speculative_k = 1
         else:
             self._effective_speculative_k = self.speculative_k

@@ -67,6 +67,10 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         max_prefix_len: int = 128,
         min_observations: int = 3,
         min_expected_net_ms: float = 12.0,
+        min_recent_support: float = 0.05,
+        recent_support_weight: float = 0.9,
+        streak_bonus_ms: float = 3.0,
+        weak_recent_penalty_ms: float = 4.0,
     ):
         self.min_frequency = min_frequency
         self.token_benefit_ms = token_benefit_ms
@@ -80,6 +84,10 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         self.max_prefix_len = max_prefix_len
         self.min_observations = min_observations
         self.min_expected_net_ms = min_expected_net_ms
+        self.min_recent_support = min_recent_support
+        self.recent_support_weight = recent_support_weight
+        self.streak_bonus_ms = streak_bonus_ms
+        self.weak_recent_penalty_ms = weak_recent_penalty_ms
 
     def _estimate_memory_mb(self, prefix: Tuple[int, ...]) -> float:
         return max(len(prefix) * 0.0015, 0.002)
@@ -97,11 +105,24 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         bonus += min(observations, 8) * 0.8
         return bonus
 
-    def _expected_benefit_ms(self, prefix: Tuple[int, ...], freq: float, observations: int, target_tier: str) -> float:
+    def _expected_benefit_ms(
+        self,
+        prefix: Tuple[int, ...],
+        freq: float,
+        observations: int,
+        target_tier: str,
+        recent_support: float,
+        recent_streak: int,
+    ) -> float:
         effective_len = min(len(prefix), self.max_prefix_len)
-        confidence = min(observations / max(self.min_observations + 2, 1), 1.0)
+        observation_confidence = min(observations / max(self.min_observations + 2, 1), 1.0)
+        recency_confidence = min(0.25 + self.recent_support_weight * recent_support + 0.10 * min(recent_streak, 4), 1.25)
+        confidence = min(observation_confidence * recency_confidence, 1.25)
         benefit = freq * confidence * effective_len * self.token_benefit_ms
         benefit += self._template_bonus(len(prefix), observations)
+        benefit += min(recent_streak, 3) * self.streak_bonus_ms
+        if recent_support < self.min_recent_support:
+            benefit -= self.weak_recent_penalty_ms
         if target_tier == 'gpu':
             benefit += self.gpu_bonus_ms
         return float(benefit)
@@ -124,7 +145,11 @@ class CostAwareSlackPolicy(SpeculationPolicy):
                 continue
             if float(freq) < self.min_frequency or observations < self.min_observations:
                 continue
-            expected_benefit = self._expected_benefit_ms(prefix, float(freq), observations, target_tier)
+            recent_support = bank.recent_prefix_support(prefix)
+            recent_streak = bank.recent_prefix_streak(prefix)
+            if recent_support < self.min_recent_support and observations < (self.min_observations + 2):
+                continue
+            expected_benefit = self._expected_benefit_ms(prefix, float(freq), observations, target_tier, recent_support, recent_streak)
             expected_cost = self._expected_cost_ms(prefix, bank, target_tier)
             expected_net = expected_benefit - expected_cost
             if expected_cost <= 0.0:
@@ -133,7 +158,13 @@ class CostAwareSlackPolicy(SpeculationPolicy):
                 continue
             if expected_benefit < self.benefit_cost_ratio * expected_cost:
                 continue
-            score = (expected_net / expected_cost) + (0.004 * min(len(prefix), self.preferred_prefix_len)) + min(observations, 10) * 0.02
+            score = (
+                (expected_net / expected_cost)
+                + (0.004 * min(len(prefix), self.preferred_prefix_len))
+                + min(observations, 10) * 0.02
+                + (0.20 * recent_support)
+                + (0.03 * min(recent_streak, 4))
+            )
             decisions.append(
                 SpeculationDecision(
                     prefix_tokens=prefix,

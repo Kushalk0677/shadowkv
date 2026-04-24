@@ -103,3 +103,27 @@ def test_shadowkv_controller_enters_cooldown_after_wasted_speculation():
 
     assert allowed is False
     assert engine.engine_metrics['speculation_cooldown_events'] >= 1
+
+
+def test_shadowkv_controller_pauses_when_recent_reuse_density_is_too_low():
+    backend = FakeBackend(device='cpu')
+    engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=1.0)
+    engine.stop_event.set()
+    engine.thread.join(timeout=1.0)
+
+    engine.engine_metrics['requests_seen'] = 20
+    engine._recent_request_window.extend(
+        [
+            (64, 0, False),
+            (60, 0, False),
+            (72, 0, False),
+            (58, 0, False),
+            (70, 0, False),
+            (66, 0, False),
+        ]
+    )
+
+    allowed = engine._refresh_speculation_controller()
+
+    assert allowed is False
+    assert engine.engine_metrics['recent_reuse_density_final'] == 0.0

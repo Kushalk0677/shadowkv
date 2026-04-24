@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -43,6 +44,7 @@ class TieredStateBank:
         self.entries: Dict[Tuple[int, ...], CacheEntry] = {}
         self.frequency_counter: Dict[Tuple[int, ...], float] = defaultdict(float)
         self.observation_count: Dict[Tuple[int, ...], int] = defaultdict(int)
+        self.recent_queries: deque[Tuple[int, ...]] = deque(maxlen=48)
         self.current_memory_bytes = 0
         self.metrics = {
             'hits': 0,
@@ -108,9 +110,32 @@ class TieredStateBank:
                 items.append((prefix, float(freq), int(self.observation_count.get(prefix, 0))))
             return items
 
+    def recent_query_count(self) -> int:
+        with self._lock:
+            return len(self.recent_queries)
+
+    def recent_prefix_support(self, prefix_tokens: Tuple[int, ...], window: int = 16) -> float:
+        with self._lock:
+            queries = list(self.recent_queries)[-max(window, 1):]
+            if not queries:
+                return 0.0
+            matches = sum(1 for query in queries if len(query) >= len(prefix_tokens) and query[: len(prefix_tokens)] == prefix_tokens)
+            return matches / len(queries)
+
+    def recent_prefix_streak(self, prefix_tokens: Tuple[int, ...], window: int = 8) -> int:
+        with self._lock:
+            streak = 0
+            for query in reversed(list(self.recent_queries)[-max(window, 1):]):
+                if len(query) >= len(prefix_tokens) and query[: len(prefix_tokens)] == prefix_tokens:
+                    streak += 1
+                else:
+                    break
+            return streak
+
     def observe_query(self, tokens: Tuple[int, ...], tracked_prefix_lengths: Optional[List[int]] = None) -> None:
         tracked_prefix_lengths = tracked_prefix_lengths or self._default_prefix_lengths(tokens)
         with self._lock:
+            self.recent_queries.append(tokens)
             for length in tracked_prefix_lengths:
                 if length < self.min_match_length or length > len(tokens):
                     continue
