@@ -7,8 +7,6 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from .utils import common_prefix_length
-
 
 @dataclass
 class CacheEntry:
@@ -47,6 +45,7 @@ class TieredStateBank:
         self.recent_queries: deque[Tuple[int, ...]] = deque(maxlen=48)
         self.recent_query_times: deque[float] = deque(maxlen=48)
         self.continuation_tokens: Dict[Tuple[int, ...], set[int]] = defaultdict(set)
+        self._entry_trie: Dict[str, Any] = {'children': {}, 'entry_key': None}
         self.current_memory_bytes = 0
         self.metrics = {
             'hits': 0,
@@ -244,6 +243,7 @@ class TieredStateBank:
                 first_reuse_at=None,
             )
             self.entries[prefix_tokens] = entry
+            self._trie_insert_unlocked(prefix_tokens)
             self.current_memory_bytes += memory_bytes
             return True
 
@@ -290,9 +290,7 @@ class TieredStateBank:
         with self._lock:
             for entry in self.entries.values():
                 if entry.was_speculative and not entry.speculative_reused:
-                    self.metrics['wasted_precomputes'] += 1
-                    self.metrics['wasted_compute_ms'] += float(entry.generation_cost_ms)
-                    entry.speculative_reused = True
+                    self._mark_speculative_wasted_unlocked(entry)
 
     def top_candidates(self, k: int, exclude_stored: bool = True, max_prefix_len: int | None = 24) -> List[Tuple[int, ...]]:
         with self._lock:
@@ -329,25 +327,33 @@ class TieredStateBank:
             }
 
     def _find_match_unlocked(self, tokens: Tuple[int, ...]) -> Optional[Tuple[Tuple[int, ...], CacheEntry, int]]:
-        best_key = None
-        best_len = self.min_match_length - 1
-        for key in self.entries:
-            overlap = common_prefix_length(key, tokens)
-            if overlap == len(key) and overlap > best_len:
-                best_key = key
-                best_len = overlap
-        if best_key is None:
+        node = self._entry_trie
+        best_key = node.get('entry_key')
+        best_len = 0
+        for idx, token in enumerate(tokens, start=1):
+            children = node.get('children', {})
+            if token not in children:
+                break
+            node = children[token]
+            entry_key = node.get('entry_key')
+            if entry_key is not None:
+                best_key = entry_key
+                best_len = idx
+        if best_key is None or best_len < self.min_match_length:
             return None
-        return best_key, self.entries[best_key], best_len
+        entry = self.entries.get(best_key)
+        if entry is None:
+            return None
+        return best_key, entry, best_len
 
     def _remove_unlocked(self, prefix_tokens: Tuple[int, ...]) -> None:
         entry = self.entries.pop(prefix_tokens, None)
         if entry is None:
             return
+        self._trie_remove_unlocked(prefix_tokens)
         self.current_memory_bytes -= entry.memory_bytes
         if entry.was_speculative and not entry.speculative_reused:
-            self.metrics['wasted_precomputes'] += 1
-            self.metrics['wasted_compute_ms'] += float(entry.generation_cost_ms)
+            self._mark_speculative_wasted_unlocked(entry)
 
     def _evict_one_unlocked(self, exclude_key: Tuple[int, ...] | None = None) -> bool:
         keys = [k for k in self.entries if k != exclude_key]
@@ -371,3 +377,31 @@ class TieredStateBank:
         for frac in (0.25, 0.5, 0.75):
             lengths.add(max(self.min_match_length, min(n, int(round(n * frac)))))
         return sorted(length for length in lengths if self.min_match_length <= length <= n)
+
+    def _mark_speculative_wasted_unlocked(self, entry: CacheEntry) -> None:
+        self.metrics['wasted_precomputes'] += 1
+        self.metrics['wasted_compute_ms'] += float(entry.generation_cost_ms)
+        entry.speculative_reused = True
+
+    def _trie_insert_unlocked(self, prefix_tokens: Tuple[int, ...]) -> None:
+        node = self._entry_trie
+        for token in prefix_tokens:
+            node = node['children'].setdefault(token, {'children': {}, 'entry_key': None})
+        node['entry_key'] = prefix_tokens
+
+    def _trie_remove_unlocked(self, prefix_tokens: Tuple[int, ...]) -> None:
+        path = []
+        node = self._entry_trie
+        for token in prefix_tokens:
+            children = node.get('children', {})
+            child = children.get(token)
+            if child is None:
+                return
+            path.append((node, token, child))
+            node = child
+        node['entry_key'] = None
+        for parent, token, child in reversed(path):
+            if child.get('entry_key') is None and not child.get('children'):
+                del parent['children'][token]
+            else:
+                break

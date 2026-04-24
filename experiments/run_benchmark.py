@@ -118,6 +118,7 @@ def _profile_shadowkv_costs(backend) -> dict:
 
     if not lengths:
         estimate = max(float(backend.estimate_prefill_cost_ms(32)) / 32.0, 0.1)
+        kv_mb_per_token = max(float(backend.estimate_kv_cache_bytes(32)) / (32.0 * 1024.0 * 1024.0), 0.0005)
         return {
             'profile_lengths': [],
             'profile_latencies_ms': [],
@@ -126,6 +127,7 @@ def _profile_shadowkv_costs(backend) -> dict:
             'speculation_penalty_ms': max(estimate * 4.0, 2.0),
             'ms_per_token': estimate,
             'fixed_prefill_overhead_ms': max(estimate * 4.0, 2.0),
+            'kv_mb_per_token': kv_mb_per_token,
         }
 
     measured_ms_per_token = [lat / max(length, 1) for length, lat in zip(lengths, latencies)]
@@ -148,6 +150,7 @@ def _profile_shadowkv_costs(backend) -> dict:
         'speculation_penalty_ms': float(speculation_penalty_ms),
         'ms_per_token': float(token_benefit_ms),
         'fixed_prefill_overhead_ms': float(speculation_penalty_ms),
+        'kv_mb_per_token': max(float(backend.estimate_kv_cache_bytes(lengths[-1])) / (max(lengths[-1], 1) * 1024.0 * 1024.0), 0.0005),
     }
 
 
@@ -155,6 +158,7 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
     calibration = _profile_shadowkv_costs(backend)
     token_benefit_ms = calibration['ms_per_token']
     speculation_penalty_ms = calibration['fixed_prefill_overhead_ms']
+    kv_mb_per_token = calibration['kv_mb_per_token']
     scaffold_mode = prompt_mode in ('templated', 'rag')
     if backend.device.startswith('cuda'):
         policy_kwargs = {
@@ -162,6 +166,7 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
             'ms_per_token': token_benefit_ms,
             'fixed_prefill_overhead_ms': speculation_penalty_ms,
             'memory_penalty_per_mb': 0.75,
+            'kv_mb_per_token': kv_mb_per_token,
             'idle_cost_fraction': 0.55,
             'gpu_idle_cost_fraction': 0.30,
             'benefit_cost_ratio': 0.92,
@@ -193,6 +198,7 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
         'ms_per_token': max(token_benefit_ms * 0.95, 0.2),
         'fixed_prefill_overhead_ms': max(speculation_penalty_ms * 1.1, 2.0),
         'memory_penalty_per_mb': 0.90,
+        'kv_mb_per_token': kv_mb_per_token,
         'idle_cost_fraction': 0.75,
         'gpu_idle_cost_fraction': 0.75,
         'benefit_cost_ratio': 1.35,

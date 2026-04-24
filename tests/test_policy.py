@@ -61,3 +61,26 @@ def test_policy_prefers_recently_active_prefixes():
 
     assert ranked
     assert ranked[0].prefix_tokens == fresh
+
+
+def test_policy_prunes_dominated_shorter_subprefixes():
+    bank = TieredStateBank(max_memory_bytes=4096, min_match_length=3)
+    full = (1, 2, 3, 4, 5, 6)
+    for _ in range(12):
+        bank.observe_query(full)
+
+    policy = CostAwareSlackPolicy(
+        min_frequency=0.10,
+        benefit_cost_ratio=0.10,
+        fixed_prefill_overhead_ms=1.0,
+        memory_penalty_per_mb=0.1,
+        max_admissions_per_idle=4,
+        min_prefix_len=3,
+        max_prefix_len=24,
+        min_expected_net_ms=0.1,
+    )
+    ranked = policy.rank(bank, budget_k=4)
+
+    assert ranked
+    assert ranked[0].prefix_tokens == full
+    assert (1, 2, 3) not in [d.prefix_tokens for d in ranked]

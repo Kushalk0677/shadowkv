@@ -67,6 +67,7 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         ms_per_token: float = 1.2,
         fixed_prefill_overhead_ms: float = 5.0,
         memory_penalty_per_mb: float = 0.9,
+        kv_mb_per_token: float = 0.0015,
         idle_cost_fraction: float = 0.50,
         gpu_idle_cost_fraction: float = 0.35,
         benefit_cost_ratio: float = 1.05,
@@ -86,11 +87,13 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         min_utility_score: float = 0.0,
         reuse_horizon_s: float = 0.75,
         branching_weight: float = 0.12,
+        dominance_tolerance: float = 0.90,
     ):
         self.min_frequency = min_frequency
         self.ms_per_token = ms_per_token
         self.fixed_prefill_overhead_ms = fixed_prefill_overhead_ms
         self.memory_penalty_per_mb = memory_penalty_per_mb
+        self.kv_mb_per_token = kv_mb_per_token
         self.idle_cost_fraction = idle_cost_fraction
         self.gpu_idle_cost_fraction = gpu_idle_cost_fraction
         self.benefit_cost_ratio = benefit_cost_ratio
@@ -110,9 +113,10 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         self.min_utility_score = min_utility_score
         self.reuse_horizon_s = reuse_horizon_s
         self.branching_weight = branching_weight
+        self.dominance_tolerance = dominance_tolerance
 
     def _estimate_memory_mb(self, prefix: Tuple[int, ...]) -> float:
-        return max(len(prefix) * 0.0015, 0.002)
+        return max(len(prefix) * self.kv_mb_per_token, 0.002)
 
     def _length_quality(self, prefix_len: int) -> float:
         if prefix_len < self.min_prefix_len:
@@ -164,8 +168,38 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         memory_cost = estimated_memory_mb * self.memory_penalty_per_mb
         return float((prefill_cost * idle_fraction + memory_cost) * pressure_multiplier)
 
+    def _prune_dominated_candidates(self, candidates: List[dict]) -> List[dict]:
+        kept: List[dict] = []
+        sorted_candidates = sorted(
+            candidates,
+            key=lambda item: (
+                -len(item['prefix']),
+                -item['recent_support'],
+                -item['reuse_probability'],
+                -item['observations'],
+            ),
+        )
+        for candidate in sorted_candidates:
+            dominated = False
+            for other in kept:
+                if len(other['prefix']) <= len(candidate['prefix']):
+                    continue
+                if other['prefix'][: len(candidate['prefix'])] != candidate['prefix']:
+                    continue
+                if other['recent_support'] + 1e-9 < candidate['recent_support'] * self.dominance_tolerance:
+                    continue
+                if other['reuse_probability'] + 1e-9 < candidate['reuse_probability'] * self.dominance_tolerance:
+                    continue
+                if other['observations'] + 1e-9 < candidate['observations'] * 0.75:
+                    continue
+                dominated = True
+                break
+            if not dominated:
+                kept.append(candidate)
+        return kept
+
     def rank(self, bank: TieredStateBank, budget_k: int, prefer_gpu: bool = False) -> List[SpeculationDecision]:
-        decisions: List[SpeculationDecision] = []
+        candidate_rows: List[dict] = []
         target_tier = 'gpu' if prefer_gpu else 'cpu'
         candidates = bank.get_candidate_stats(max_prefix_len=self.max_prefix_len, exclude_stored=True)
         arrival_rate_rps = bank.recent_arrival_rate()
@@ -182,11 +216,26 @@ class CostAwareSlackPolicy(SpeculationPolicy):
             reuse_probability = self._reuse_probability(float(freq), observations, recent_support, recent_streak)
             if reuse_probability <= 0.0:
                 continue
+            candidate_rows.append(
+                {
+                    'prefix': prefix,
+                    'freq': float(freq),
+                    'observations': observations,
+                    'branching_factor': branching_factor,
+                    'recent_support': recent_support,
+                    'recent_streak': recent_streak,
+                    'reuse_probability': reuse_probability,
+                }
+            )
+
+        decisions: List[SpeculationDecision] = []
+        for candidate in self._prune_dominated_candidates(candidate_rows):
+            prefix = candidate['prefix']
             expected_future_reuses = self._expected_future_reuses(
-                reuse_probability=reuse_probability,
-                recent_support=recent_support,
-                recent_streak=recent_streak,
-                branching_factor=branching_factor,
+                reuse_probability=candidate['reuse_probability'],
+                recent_support=candidate['recent_support'],
+                recent_streak=candidate['recent_streak'],
+                branching_factor=candidate['branching_factor'],
                 arrival_rate_rps=arrival_rate_rps,
             )
             expected_benefit = self._expected_saved_prefill_ms(prefix, expected_future_reuses)
@@ -200,8 +249,8 @@ class CostAwareSlackPolicy(SpeculationPolicy):
                 continue
             score = (
                 expected_net / max(expected_cost, 1e-6)
-                + 0.20 * reuse_probability
-                + 0.06 * min(max(branching_factor - 1, 0), 4)
+                + 0.20 * candidate['reuse_probability']
+                + 0.06 * min(max(candidate['branching_factor'] - 1, 0), 4)
                 + 0.08 * self._length_quality(len(prefix))
             )
             if score < self.min_utility_score:

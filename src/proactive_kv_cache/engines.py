@@ -134,12 +134,15 @@ class BaseEngine:
         store_successes = int(self.engine_metrics.get('store_successes', 0))
         min_requests = int(self.engine_metrics.get('cache_disable_min_requests', 10))
         min_attempts = int(self.engine_metrics.get('cache_disable_min_attempts', 8))
+        check_every = max(int(self.engine_metrics.get('cache_disable_check_every', 8)), 1)
         bank_snapshot = self.bank.snapshot_metrics()
         if requests_seen >= 4:
             all_misses = int(bank_snapshot.get('hits', 0)) == 0 and int(bank_snapshot.get('misses', 0)) >= requests_seen
             if all_misses and attempts == 0 and store_successes >= 3:
                 self._set_cache_disabled('no_prefix_reuse_early')
                 return
+        if requests_seen % check_every != 0:
+            return
         if requests_seen < min_requests or attempts < min_attempts:
             return
         success_rate = successes / max(attempts, 1)
@@ -438,17 +441,65 @@ class NativePrefixCachingEngine(BaseEngine):
     def __init__(self, backend: Backend, max_memory_mb: int = 256):
         super().__init__(backend=backend, max_memory_mb=max_memory_mb, name='native_prefix_cache')
         self.engine_metrics['cache_active_final'] = True
+        self._native_placeholder_bytes = 1
+
+    def _store_native_placeholder(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> None:
+        prefix_len = self._reactive_prefix_len(tokens, metadata)
+        if prefix_len < self.bank.min_match_length:
+            return
+        prefix = tokens[:prefix_len]
+        if self.bank.contains(prefix):
+            return
+        self.bank.store(prefix, None, generation_cost_ms=0.0, memory_bytes=self._native_placeholder_bytes, is_speculative=False, tier='cpu')
+
+    def _should_attempt_cache_use(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int, metadata: Dict | None = None) -> bool:
+        if not self.cache_enabled:
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        total_tokens = len(tokens)
+        suffix_len = max(total_tokens - match_len, 0)
+        hint_len = self._shared_prefix_hint(tokens, metadata)
+        scaffold_match = hint_len is not None and match_len >= hint_len and self._has_scaffold_hint(tokens, metadata)
+        self.engine_metrics['reuse_attempts'] += 1
+        if match_len < self.tuning.min_reuse_prefix_tokens:
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        if not scaffold_match and total_tokens > 0 and match_len / total_tokens < self.tuning.min_prefix_coverage_ratio:
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        estimated_saved = self._estimate_saved_ms(total_tokens, match_len, suffix_len)
+        if estimated_saved < self.tuning.min_estimated_saved_ms * (0.5 if scaffold_match else 1.0):
+            self.engine_metrics['bypassed_matches'] += 1
+            self.bank.add_metric('bypassed_matches', 1)
+            return False
+        self.engine_metrics['estimated_tokens_saved_total'] = int(self.engine_metrics.get('estimated_tokens_saved_total', 0)) + int(match_len)
+        self.engine_metrics['saved_latency_estimate_ms'] = float(self.engine_metrics.get('saved_latency_estimate_ms', 0.0)) + float(max(estimated_saved, 0.0))
+        return True
 
     def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
         self._observe_request(tokens, metadata)
+        match = self.bank.peek_match(tokens)
+        matched_prefix_length = 0
+        was_cache_hit = False
+        if match is not None:
+            _, entry, match_len = match
+            if self._should_attempt_cache_use(tokens, entry, match_len, metadata=metadata):
+                admitted_entry = self.bank.admit_match(match[0])
+                if admitted_entry is not None:
+                    matched_prefix_length = match_len
+                    was_cache_hit = True
         out = self._prefill_full(tokens)
+        self._store_native_placeholder(tokens, metadata)
         return self._record(
             RequestResult(
                 request_id=request_id,
                 latency_ms=out.latency_ms,
-                matched_prefix_length=0,
-                tokens_recomputed=len(tokens),
-                was_cache_hit=False,
+                matched_prefix_length=matched_prefix_length,
+                tokens_recomputed=max(len(tokens) - matched_prefix_length, 0) if was_cache_hit else len(tokens),
+                was_cache_hit=was_cache_hit,
                 was_speculative_hit=False,
                 gpu_utilization_pct=out.gpu_utilization_pct,
             )
@@ -590,11 +641,17 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
         self.last_request_time = time.time()
         self.serving_event = threading.Event()
         self.stop_event = threading.Event()
+        self._background_exception: Exception | None = None
         self.speculative_log: List[Dict] = []
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
+    def _check_background_exception(self) -> None:
+        if self._background_exception is not None:
+            raise RuntimeError(f'{self.name} background worker failed') from self._background_exception
+
     def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
+        self._check_background_exception()
         self.serving_event.set()
         self.last_request_time = time.time()
         try:
@@ -613,43 +670,48 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
     def _loop(self) -> None:
         if not getattr(self.backend, 'supports_external_kv', True):
             return
-        while not self.stop_event.is_set():
-            time.sleep(0.005)
-            idle_ms = (time.time() - self.last_request_time) * 1000.0
-            if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
-                continue
-
-            decisions = self.policy.rank(self.bank, budget_k=self.speculative_k, prefer_gpu=False)
-            for decision in decisions:
-                if self.serving_event.is_set() or self.stop_event.is_set():
-                    break
-                if self.bank.contains(decision.prefix_tokens) or not self._speculation_allowed(decision.prefix_tokens):
+        try:
+            while not self.stop_event.is_set():
+                time.sleep(0.005)
+                idle_ms = (time.time() - self.last_request_time) * 1000.0
+                if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
                     continue
 
-                out = self.backend.prefill(decision.prefix_tokens)
-                self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
-                stored = self.bank.store(
-                    decision.prefix_tokens,
-                    self.backend.move_kv_cache(out.kv_cache, 'cpu'),
-                    out.latency_ms,
-                    out.memory_bytes,
-                    is_speculative=True,
-                    tier='cpu',
-                )
-                if not stored:
-                    continue
-                self.speculative_log.append(
-                    {
-                        'policy': 'frequency',
-                        'score': decision.score,
-                        'latency_ms': out.latency_ms,
-                        'target_tier': 'cpu',
-                    }
-                )
+                decisions = self.policy.rank(self.bank, budget_k=self.speculative_k, prefer_gpu=False)
+                for decision in decisions:
+                    if self.serving_event.is_set() or self.stop_event.is_set():
+                        break
+                    if self.bank.contains(decision.prefix_tokens) or not self._speculation_allowed(decision.prefix_tokens):
+                        continue
+
+                    out = self.backend.prefill(decision.prefix_tokens)
+                    self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
+                    stored = self.bank.store(
+                        decision.prefix_tokens,
+                        self.backend.move_kv_cache(out.kv_cache, 'cpu'),
+                        out.latency_ms,
+                        out.memory_bytes,
+                        is_speculative=True,
+                        tier='cpu',
+                    )
+                    if not stored:
+                        continue
+                    self.speculative_log.append(
+                        {
+                            'policy': 'frequency',
+                            'score': decision.score,
+                            'latency_ms': out.latency_ms,
+                            'target_tier': 'cpu',
+                        }
+                    )
+        except Exception as exc:
+            self._background_exception = exc
+            self.stop_event.set()
 
     def shutdown(self) -> None:
         self.stop_event.set()
         self.thread.join(timeout=1.0)
+        self._check_background_exception()
         self.finalize()
 
 
@@ -672,9 +734,11 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         self.idle_threshold_ms = idle_threshold_ms
         self.enable_gpu_tier = enable_gpu_tier and backend.device.startswith('cuda')
         self._cpu_mode = not backend.device.startswith('cuda')
+        self._controller_lock = threading.RLock()
         self.last_request_time = time.time()
         self.serving_event = threading.Event()
         self.stop_event = threading.Event()
+        self._background_exception: Exception | None = None
         self.speculative_log: List[Dict] = []
         if getattr(backend, 'backend_name', 'fake') == 'fake':
             self._min_requests_before_speculation = 6
@@ -706,11 +770,17 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
+    def _check_background_exception(self) -> None:
+        if self._background_exception is not None:
+            raise RuntimeError(f'{self.name} background worker failed') from self._background_exception
+
     def _after_record(self, result: RequestResult) -> None:
         total_tokens = max(result.tokens_recomputed + result.matched_prefix_length, 1)
-        self._recent_request_window.append((total_tokens, result.matched_prefix_length, result.was_cache_hit))
+        with self._controller_lock:
+            self._recent_request_window.append((total_tokens, result.matched_prefix_length, result.was_cache_hit))
 
     def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
+        self._check_background_exception()
         self.serving_event.set()
         self.last_request_time = time.time()
         try:
@@ -806,120 +876,128 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
     def _refresh_speculation_controller(self) -> bool:
         now = time.time()
         snapshot = self.bank.snapshot_metrics()
-        delta_useful = float(snapshot.get('useful_speculative_savings_ms', 0.0)) - float(self._last_controller_metrics['useful_speculative_savings_ms'])
-        delta_waste = float(snapshot.get('wasted_compute_ms', 0.0)) - float(self._last_controller_metrics['wasted_compute_ms'])
-        delta_hits = int(snapshot.get('speculative_hits', 0)) - int(self._last_controller_metrics['speculative_hits'])
-        delta_wasted = int(snapshot.get('wasted_precomputes', 0)) - int(self._last_controller_metrics['wasted_precomputes'])
+        with self._controller_lock:
+            delta_useful = float(snapshot.get('useful_speculative_savings_ms', 0.0)) - float(self._last_controller_metrics['useful_speculative_savings_ms'])
+            delta_waste = float(snapshot.get('wasted_compute_ms', 0.0)) - float(self._last_controller_metrics['wasted_compute_ms'])
+            delta_hits = int(snapshot.get('speculative_hits', 0)) - int(self._last_controller_metrics['speculative_hits'])
+            delta_wasted = int(snapshot.get('wasted_precomputes', 0)) - int(self._last_controller_metrics['wasted_precomputes'])
 
-        if delta_hits > 0 or delta_wasted > 0:
-            self._recent_speculative_net_values.append(delta_useful - delta_waste)
-        if delta_wasted > 0 and delta_useful <= delta_waste:
-            self._speculation_cooldown_until = max(self._speculation_cooldown_until, now + max(self.idle_threshold_ms / 1000.0, 0.25))
-            self.engine_metrics['speculation_cooldown_events'] = int(self.engine_metrics.get('speculation_cooldown_events', 0)) + 1
+            if delta_hits > 0 or delta_wasted > 0:
+                self._recent_speculative_net_values.append(delta_useful - delta_waste)
+            if delta_wasted > 0 and delta_useful <= delta_waste:
+                self._speculation_cooldown_until = max(self._speculation_cooldown_until, now + max(self.idle_threshold_ms / 1000.0, 0.25))
+                self.engine_metrics['speculation_cooldown_events'] = int(self.engine_metrics.get('speculation_cooldown_events', 0)) + 1
 
-        self._last_controller_metrics = {
-            'speculative_hits': int(snapshot.get('speculative_hits', 0)),
-            'wasted_precomputes': int(snapshot.get('wasted_precomputes', 0)),
-            'wasted_compute_ms': float(snapshot.get('wasted_compute_ms', 0.0)),
-            'useful_speculative_savings_ms': float(snapshot.get('useful_speculative_savings_ms', 0.0)),
-        }
+            self._last_controller_metrics = {
+                'speculative_hits': int(snapshot.get('speculative_hits', 0)),
+                'wasted_precomputes': int(snapshot.get('wasted_precomputes', 0)),
+                'wasted_compute_ms': float(snapshot.get('wasted_compute_ms', 0.0)),
+                'useful_speculative_savings_ms': float(snapshot.get('useful_speculative_savings_ms', 0.0)),
+            }
 
-        requests_seen = int(self.engine_metrics.get('requests_seen', 0))
-        pending_speculative = int(snapshot.get('pending_speculative_entries', 0))
-        recent_net = sum(self._recent_speculative_net_values)
-        recent_count = len(self._recent_speculative_net_values)
-        recent_total_tokens = sum(total for total, _, _ in self._recent_request_window)
-        recent_reused_tokens = sum(reused for _, reused, _ in self._recent_request_window)
-        recent_hits = sum(1 for _, _, was_hit in self._recent_request_window if was_hit)
-        recent_request_count = len(self._recent_request_window)
-        recent_reuse_density = recent_reused_tokens / max(recent_total_tokens, 1)
-        recent_hit_rate = recent_hits / max(recent_request_count, 1)
-        self.engine_metrics['recent_reuse_density_final'] = float(recent_reuse_density)
-        self.engine_metrics['recent_hit_rate_final'] = float(recent_hit_rate)
+            requests_seen = int(self.engine_metrics.get('requests_seen', 0))
+            pending_speculative = int(snapshot.get('pending_speculative_entries', 0))
+            recent_net = sum(self._recent_speculative_net_values)
+            recent_count = len(self._recent_speculative_net_values)
+            recent_total_tokens = sum(total for total, _, _ in self._recent_request_window)
+            recent_reused_tokens = sum(reused for _, reused, _ in self._recent_request_window)
+            recent_hits = sum(1 for _, _, was_hit in self._recent_request_window if was_hit)
+            recent_request_count = len(self._recent_request_window)
+            recent_reuse_density = recent_reused_tokens / max(recent_total_tokens, 1)
+            recent_hit_rate = recent_hits / max(recent_request_count, 1)
+            self.engine_metrics['recent_reuse_density_final'] = float(recent_reuse_density)
+            self.engine_metrics['recent_hit_rate_final'] = float(recent_hit_rate)
 
-        if requests_seen < self._min_requests_before_speculation:
-            self._effective_speculative_k = 0
-        elif now < self._speculation_cooldown_until:
-            self._effective_speculative_k = 0
-        elif pending_speculative >= self._max_pending_speculative:
-            self._effective_speculative_k = 0
-        elif recent_request_count >= 6 and recent_reuse_density < 0.04 and recent_hit_rate < 0.10:
-            self._effective_speculative_k = 0
-        elif recent_count >= 2 and recent_net <= 0.0:
-            self._effective_speculative_k = 0
-        elif recent_count >= 1 and recent_net < 12.0:
-            self._effective_speculative_k = 1
-        elif self._cpu_mode and (recent_hit_rate >= 0.30 or recent_reuse_density >= 0.10):
-            self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
-        elif (not self._cpu_mode) and (recent_hit_rate >= 0.10 or recent_reuse_density >= 0.04):
-            self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
-        elif recent_hit_rate < 0.20 and recent_reuse_density < 0.08:
-            self._effective_speculative_k = 1
-        else:
-            self._effective_speculative_k = self.speculative_k
+            if requests_seen < self._min_requests_before_speculation:
+                self._effective_speculative_k = 0
+            elif now < self._speculation_cooldown_until:
+                self._effective_speculative_k = 0
+            elif pending_speculative >= self._max_pending_speculative:
+                self._effective_speculative_k = 0
+            elif recent_request_count >= 6 and recent_reuse_density < 0.04 and recent_hit_rate < 0.10:
+                self._effective_speculative_k = 0
+            elif recent_count >= 2 and recent_net <= 0.0:
+                self._effective_speculative_k = 0
+            elif recent_count >= 1 and recent_net < 12.0:
+                self._effective_speculative_k = 1
+            elif self._cpu_mode and (recent_hit_rate >= 0.30 or recent_reuse_density >= 0.10):
+                self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
+            elif (not self._cpu_mode) and (recent_hit_rate >= 0.10 or recent_reuse_density >= 0.04):
+                self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
+            elif recent_hit_rate < 0.20 and recent_reuse_density < 0.08:
+                self._effective_speculative_k = 1
+            else:
+                self._effective_speculative_k = self.speculative_k
 
-        speculation_enabled = self._effective_speculative_k > 0
-        if not speculation_enabled:
-            self.engine_metrics['speculation_paused_ticks'] = int(self.engine_metrics.get('speculation_paused_ticks', 0)) + 1
-        self.engine_metrics['speculation_enabled_final'] = speculation_enabled
-        self.engine_metrics['effective_speculative_k_final'] = self._effective_speculative_k
-        return speculation_enabled
+            speculation_enabled = self._effective_speculative_k > 0
+            if not speculation_enabled:
+                self.engine_metrics['speculation_paused_ticks'] = int(self.engine_metrics.get('speculation_paused_ticks', 0)) + 1
+            self.engine_metrics['speculation_enabled_final'] = speculation_enabled
+            self.engine_metrics['effective_speculative_k_final'] = self._effective_speculative_k
+            return speculation_enabled
 
     def _loop(self) -> None:
         if not getattr(self.backend, 'supports_external_kv', True):
             return
-        while not self.stop_event.is_set():
-            time.sleep(0.005)
-            idle_ms = (time.time() - self.last_request_time) * 1000.0
-            if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
-                continue
-            if not self._refresh_speculation_controller():
-                continue
-
-            prefer_gpu = self.enable_gpu_tier and idle_ms >= self.idle_threshold_ms
-            decisions = self.policy.rank(self.bank, budget_k=self._effective_speculative_k, prefer_gpu=prefer_gpu)
-
-            for decision in decisions:
-                if self.serving_event.is_set() or self.stop_event.is_set():
-                    break
-                if self.bank.contains(decision.prefix_tokens):
+        try:
+            while not self.stop_event.is_set():
+                time.sleep(0.005)
+                idle_ms = (time.time() - self.last_request_time) * 1000.0
+                if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
                     continue
-                if not self._speculation_allowed(decision.prefix_tokens, decision.expected_benefit_ms, decision.expected_cost_ms):
+                if not self._refresh_speculation_controller():
                     continue
 
-                out = self.backend.prefill(decision.prefix_tokens)
-                self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
-                recent_streak = self.bank.recent_prefix_streak(decision.prefix_tokens)
-                target_tier = decision.target_tier if prefer_gpu else 'cpu'
-                if self.enable_gpu_tier and recent_streak >= 2:
-                    target_tier = 'gpu'
-                device_target = self._device_target_for_tier(target_tier)
-                cache_obj = out.kv_cache if device_target == self.backend.device else self.backend.move_kv_cache(out.kv_cache, device_target)
+                prefer_gpu = self.enable_gpu_tier and idle_ms >= self.idle_threshold_ms
+                with self._controller_lock:
+                    budget_k = self._effective_speculative_k
+                decisions = self.policy.rank(self.bank, budget_k=budget_k, prefer_gpu=prefer_gpu)
 
-                stored = self.bank.store(
-                    decision.prefix_tokens,
-                    cache_obj,
-                    out.latency_ms,
-                    out.memory_bytes,
-                    is_speculative=True,
-                    tier=target_tier,
-                )
-                if not stored:
-                    continue
-                self.speculative_log.append(
-                    {
-                        'policy': 'template_aware_cost_aware_slack',
-                        'score': decision.score,
-                        'latency_ms': out.latency_ms,
-                        'target_tier': target_tier,
-                        'expected_benefit_ms': decision.expected_benefit_ms,
-                        'expected_cost_ms': decision.expected_cost_ms,
-                    }
-                )
+                for decision in decisions:
+                    if self.serving_event.is_set() or self.stop_event.is_set():
+                        break
+                    if self.bank.contains(decision.prefix_tokens):
+                        continue
+                    if not self._speculation_allowed(decision.prefix_tokens, decision.expected_benefit_ms, decision.expected_cost_ms):
+                        continue
+
+                    out = self.backend.prefill(decision.prefix_tokens)
+                    self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
+                    recent_streak = self.bank.recent_prefix_streak(decision.prefix_tokens)
+                    target_tier = decision.target_tier if prefer_gpu else 'cpu'
+                    if self.enable_gpu_tier and recent_streak >= 2:
+                        target_tier = 'gpu'
+                    device_target = self._device_target_for_tier(target_tier)
+                    cache_obj = out.kv_cache if device_target == self.backend.device else self.backend.move_kv_cache(out.kv_cache, device_target)
+
+                    stored = self.bank.store(
+                        decision.prefix_tokens,
+                        cache_obj,
+                        out.latency_ms,
+                        out.memory_bytes,
+                        is_speculative=True,
+                        tier=target_tier,
+                    )
+                    if not stored:
+                        continue
+                    self.speculative_log.append(
+                        {
+                            'policy': 'template_aware_cost_aware_slack',
+                            'score': decision.score,
+                            'latency_ms': out.latency_ms,
+                            'target_tier': target_tier,
+                            'expected_benefit_ms': decision.expected_benefit_ms,
+                            'expected_cost_ms': decision.expected_cost_ms,
+                        }
+                    )
+        except Exception as exc:
+            self._background_exception = exc
+            self.stop_event.set()
 
     def shutdown(self) -> None:
         self.stop_event.set()
         self.thread.join(timeout=1.0)
+        self._check_background_exception()
         self.finalize()
 
 

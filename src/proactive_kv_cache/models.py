@@ -41,6 +41,9 @@ class Backend:
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         return float(max(token_count, 0))
 
+    def estimate_kv_cache_bytes(self, token_count: int) -> int:
+        return int(max(token_count, 0) * 1024)
+
 
 class FakeBackend(Backend):
     backend_name = 'fake'
@@ -69,6 +72,9 @@ class FakeBackend(Backend):
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         latency_per_token = 2.5 if self.device == 'cpu' else 1.0
         return float(latency_per_token * max(token_count, 0) + 0.25)
+
+    def estimate_kv_cache_bytes(self, token_count: int) -> int:
+        return int(max(token_count, 0) * (128 if self.device == 'cpu' else 160))
 
     def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
         token_count = len(tokens)
@@ -125,6 +131,17 @@ class HuggingFaceBackend(Backend):
         self.model.to(device)
         self._nvml = _try_init_nvml(device)
         self.max_positions = int(getattr(self.model.config, 'n_positions', None) or getattr(self.model.config, 'max_position_embeddings', None) or 1024)
+        config = self.model.config
+        num_layers = int(getattr(config, 'num_hidden_layers', None) or getattr(config, 'n_layer', None) or 0)
+        num_heads = int(getattr(config, 'num_attention_heads', None) or getattr(config, 'n_head', None) or 0)
+        num_kv_heads = int(getattr(config, 'num_key_value_heads', None) or max(num_heads, 1))
+        hidden_size = int(getattr(config, 'hidden_size', None) or getattr(config, 'n_embd', None) or 0)
+        head_dim = int(getattr(config, 'head_dim', None) or (hidden_size // max(num_heads, 1) if hidden_size and num_heads else 0) or 64)
+        try:
+            dtype_bytes = int(next(self.model.parameters()).element_size())
+        except Exception:
+            dtype_bytes = 2 if device.startswith('cuda') else 4
+        self._kv_bytes_per_token = max(2 * max(num_layers, 1) * max(num_kv_heads, 1) * max(head_dim, 1) * max(dtype_bytes, 1), 1)
 
     def tokenize(self, text: str) -> Tuple[int, ...]:
         encoded = self.tokenizer(text, return_tensors='pt', truncation=True, max_length=self.max_positions)
@@ -150,8 +167,11 @@ class HuggingFaceBackend(Backend):
             for layer in past_key_values:
                 moved_layers.append(tuple(t.to(target) for t in layer))
             return tuple(moved_layers)
-        except Exception:
-            return past_key_values
+        except Exception as exc:
+            raise RuntimeError(f'Failed to move past_key_values to {target!r} for model {self.model_name!r}') from exc
+
+    def estimate_kv_cache_bytes(self, token_count: int) -> int:
+        return int(max(token_count, 0) * self._kv_bytes_per_token)
 
     def _past_length(self, past_key_values: Any) -> int:
         if past_key_values is None:
@@ -288,6 +308,9 @@ class VLLMBackend(Backend):
 
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         return float(0.35 * max(token_count, 0) + 4.0)
+
+    def estimate_kv_cache_bytes(self, token_count: int) -> int:
+        return int(max(token_count, 0) * 256)
 
     def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
         if past_key_values is not None:
