@@ -219,10 +219,21 @@ class BaseEngine:
             return None
         return min(len(tokens), hint_len)
 
+    def _has_scaffold_hint(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> bool:
+        hint_len = self._shared_prefix_hint(tokens, metadata)
+        if hint_len is None:
+            return False
+        prompt_mode = str((metadata or {}).get('prompt_mode', '')).strip().lower()
+        if prompt_mode in {'templated', 'rag'}:
+            return True
+        return bool((metadata or {}).get('shared_prefix_text'))
+
     def _tracked_prefix_lengths(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> List[int]:
         hint_len = self._shared_prefix_hint(tokens, metadata)
         if hint_len is None:
             return self.bank.default_prefix_lengths(tokens)
+        if self._has_scaffold_hint(tokens, metadata):
+            return [hint_len]
         hint_tokens = tokens[:hint_len]
         lengths = set(self.bank.default_prefix_lengths(hint_tokens))
         lengths.add(hint_len)
@@ -260,6 +271,8 @@ class BaseEngine:
         return gross_saved - penalty - 0.10 * suffix_cost
 
     def _reactive_prefix_len(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> int:
+        if self._has_scaffold_hint(tokens, metadata):
+            return self._request_cacheable_prefix_limit(tokens, metadata)
         candidate_lengths = self._tracked_prefix_lengths(tokens, metadata)
         max_cacheable_prefix = self._request_cacheable_prefix_limit(tokens, metadata)
         best_len = min(len(tokens), max(self.bank.min_match_length, self.tuning.min_store_prefix_tokens))
@@ -328,7 +341,7 @@ class BaseEngine:
         self.engine_metrics['store_skips'] += 1
         return 0.0
 
-    def _should_attempt_cache_use(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int) -> bool:
+    def _should_attempt_cache_use(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int, metadata: Dict | None = None) -> bool:
         if not self.cache_enabled:
             self.engine_metrics['bypassed_matches'] += 1
             self.bank.add_metric('bypassed_matches', 1)
@@ -339,17 +352,20 @@ class BaseEngine:
             return False
         total_tokens = len(tokens)
         suffix_len = max(total_tokens - match_len, 0)
+        hint_len = self._shared_prefix_hint(tokens, metadata)
+        scaffold_match = hint_len is not None and match_len >= hint_len and self._has_scaffold_hint(tokens, metadata)
         self.engine_metrics['reuse_attempts'] += 1
         if match_len < self.tuning.min_reuse_prefix_tokens:
             self.engine_metrics['bypassed_matches'] += 1
             self.bank.add_metric('bypassed_matches', 1)
             return False
-        if total_tokens > 0 and match_len / total_tokens < self.tuning.min_prefix_coverage_ratio:
+        if not scaffold_match and total_tokens > 0 and match_len / total_tokens < self.tuning.min_prefix_coverage_ratio:
             self.engine_metrics['bypassed_matches'] += 1
             self.bank.add_metric('bypassed_matches', 1)
             return False
         estimated_saved = self._estimate_saved_ms(total_tokens, match_len, suffix_len)
-        if estimated_saved < self.tuning.min_estimated_saved_ms:
+        min_saved_gate = self.tuning.min_estimated_saved_ms * (0.5 if scaffold_match else 1.0)
+        if estimated_saved < min_saved_gate:
             self.engine_metrics['bypassed_matches'] += 1
             self.bank.add_metric('bypassed_matches', 1)
             return False
@@ -463,7 +479,7 @@ class ReactivePrefixCacheEngine(BaseEngine):
             )
 
         key, entry, match_len = match
-        if not self._should_attempt_cache_use(tokens, entry, match_len):
+        if not self._should_attempt_cache_use(tokens, entry, match_len, metadata=metadata):
             self.bank.record_miss()
             out = self._prefill_full(tokens)
             return self._record(
@@ -543,7 +559,7 @@ class GreedyPrefixCacheEngine(ReactivePrefixCacheEngine):
             return False
         return True
 
-    def _should_attempt_cache_use(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int) -> bool:
+    def _should_attempt_cache_use(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int, metadata: Dict | None = None) -> bool:
         if not self.cache_enabled:
             self.engine_metrics['bypassed_matches'] += 1
             self.bank.add_metric('bypassed_matches', 1)
@@ -715,7 +731,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
                 )
             else:
                 key, entry, match_len = match
-                if not self._should_attempt_cache_use(tokens, entry, match_len):
+                if not self._should_attempt_cache_use(tokens, entry, match_len, metadata=metadata):
                     self.bank.record_miss()
                     out = self._prefill_full(tokens)
                     result = RequestResult(

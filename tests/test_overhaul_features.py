@@ -1,4 +1,5 @@
 from proactive_kv_cache.datasets import _apply_prompt_mode, list_datasets
+from proactive_kv_cache.engines import ReactivePrefixCacheEngine
 from proactive_kv_cache.models import FakeBackend
 from proactive_kv_cache.policy import CostAwareSlackPolicy
 from proactive_kv_cache.cache import TieredStateBank
@@ -35,6 +36,21 @@ def test_prompt_modes_add_shared_scaffolds():
     assert templated_prompt.startswith(templated_shared)
     assert rag_prompt.startswith(rag_shared)
     assert len(rag_shared) > len(templated_shared) > 0
+
+
+def test_scaffold_hint_tracks_only_the_full_shared_prefix():
+    backend = FakeBackend()
+    engine = ReactivePrefixCacheEngine(backend=backend)
+    prompt = 'shared scaffold body user specific tail'
+    tokens = backend.tokenize(prompt)
+    metadata = {
+        'prompt_mode': 'templated',
+        'shared_prefix_hint_tokens': 5,
+        'shared_prefix_text': 'shared scaffold body',
+    }
+    lengths = engine._tracked_prefix_lengths(tokens, metadata)
+    assert lengths == [5]
+    assert engine._reactive_prefix_len(tokens, metadata) == 5
 
 
 def test_cost_policy_requires_observation_support():
