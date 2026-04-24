@@ -549,14 +549,21 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         self.speculative_k = speculative_k
         self.idle_threshold_ms = idle_threshold_ms
         self.enable_gpu_tier = enable_gpu_tier and backend.device.startswith('cuda')
+        self._cpu_mode = not backend.device.startswith('cuda')
         self.last_request_time = time.time()
         self.serving_event = threading.Event()
         self.stop_event = threading.Event()
         self.speculative_log: List[Dict] = []
-        self._min_requests_before_speculation = 6 if getattr(backend, 'backend_name', 'fake') == 'fake' else 10
+        if getattr(backend, 'backend_name', 'fake') == 'fake':
+            self._min_requests_before_speculation = 6
+        elif self._cpu_mode:
+            self._min_requests_before_speculation = 8
+        else:
+            self._min_requests_before_speculation = 10
         self._speculation_cooldown_until = 0.0
         self._recent_speculative_net_values: deque[float] = deque(maxlen=6)
-        self._recent_request_window: deque[Tuple[int, int, bool]] = deque(maxlen=12)
+        self._recent_request_window: deque[Tuple[int, int, bool]] = deque(maxlen=16 if self._cpu_mode else 12)
+        self._max_pending_speculative = 2 if self._cpu_mode else 1
         self._effective_speculative_k = speculative_k
         self._last_controller_metrics = {
             'speculative_hits': 0,
@@ -664,10 +671,14 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         recent_streak = self.bank.recent_prefix_streak(decision_prefix)
         if recent_support <= 0.0 and recent_streak == 0:
             return False
+        if self._cpu_mode:
+            support_gate = recent_support >= 0.08 or recent_streak >= 2
+        else:
+            support_gate = recent_support >= 0.10 or recent_streak >= 2
         return (
             decision_benefit_ms >= max(decision_cost_ms, 0.0)
             and estimated_cost >= self.tuning.min_estimated_saved_ms
-            and (recent_support >= 0.10 or recent_streak >= 2)
+            and support_gate
         )
 
     def _refresh_speculation_controller(self) -> bool:
@@ -708,7 +719,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
             self._effective_speculative_k = 0
         elif now < self._speculation_cooldown_until:
             self._effective_speculative_k = 0
-        elif pending_speculative >= 1:
+        elif pending_speculative >= self._max_pending_speculative:
             self._effective_speculative_k = 0
         elif recent_request_count >= 6 and recent_reuse_density < 0.04 and recent_hit_rate < 0.10:
             self._effective_speculative_k = 0
@@ -716,6 +727,8 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
             self._effective_speculative_k = 0
         elif recent_count >= 1 and recent_net < 12.0:
             self._effective_speculative_k = 1
+        elif self._cpu_mode and (recent_hit_rate >= 0.30 or recent_reuse_density >= 0.10):
+            self._effective_speculative_k = min(max(self.speculative_k, 1), 2)
         elif recent_hit_rate < 0.20 and recent_reuse_density < 0.08:
             self._effective_speculative_k = 1
         else:

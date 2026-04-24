@@ -79,8 +79,10 @@ def test_shadowkv_controller_pauses_when_pending_speculation_is_already_outstand
     engine.thread.join(timeout=1.0)
 
     engine.engine_metrics['requests_seen'] = 20
-    prefix = (1, 2, 3, 4)
-    engine.bank.store(prefix, {'prefix_len': 4, 'device': 'cpu'}, 5.0, 128, is_speculative=True, tier='cpu')
+    first = (1, 2, 3, 4)
+    second = (5, 6, 7, 8)
+    engine.bank.store(first, {'prefix_len': 4, 'device': 'cpu'}, 5.0, 128, is_speculative=True, tier='cpu')
+    engine.bank.store(second, {'prefix_len': 4, 'device': 'cpu'}, 5.0, 128, is_speculative=True, tier='cpu')
 
     allowed = engine._refresh_speculation_controller()
 
@@ -127,3 +129,28 @@ def test_shadowkv_controller_pauses_when_recent_reuse_density_is_too_low():
 
     assert allowed is False
     assert engine.engine_metrics['recent_reuse_density_final'] == 0.0
+
+
+def test_shadowkv_cpu_controller_opens_up_when_recent_reuse_is_strong():
+    backend = FakeBackend(device='cpu')
+    engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=1.0)
+    engine.stop_event.set()
+    engine.thread.join(timeout=1.0)
+
+    engine.engine_metrics['requests_seen'] = 20
+    engine._recent_request_window.extend(
+        [
+            (64, 24, True),
+            (60, 20, True),
+            (72, 24, True),
+            (58, 18, True),
+            (70, 20, True),
+            (66, 22, True),
+        ]
+    )
+    engine._recent_speculative_net_values.append(18.0)
+
+    allowed = engine._refresh_speculation_controller()
+
+    assert allowed is True
+    assert engine.engine_metrics['effective_speculative_k_final'] == 2
