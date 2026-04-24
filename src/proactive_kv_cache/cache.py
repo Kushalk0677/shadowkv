@@ -256,12 +256,16 @@ class TieredStateBank:
         with self._lock:
             total = self.metrics['hits'] + self.metrics['misses']
             tier_counts = {'gpu_entries': 0, 'cpu_entries': 0}
+            pending_speculative_entries = 0
             for entry in self.entries.values():
                 tier_counts[f'{entry.tier}_entries'] = tier_counts.get(f'{entry.tier}_entries', 0) + 1
+                if entry.was_speculative and not entry.speculative_reused:
+                    pending_speculative_entries += 1
             return {
                 **self.metrics,
                 **tier_counts,
                 'entries_stored': len(self.entries),
+                'pending_speculative_entries': pending_speculative_entries,
                 'memory_used_mb': self.current_memory_bytes / (1024 ** 2),
                 'hit_rate': self.metrics['hits'] / max(total, 1),
                 'speculative_hit_rate': self.metrics['speculative_hits'] / max(self.metrics['hits'], 1),

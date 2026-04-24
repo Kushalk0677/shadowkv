@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -548,6 +549,24 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         self.serving_event = threading.Event()
         self.stop_event = threading.Event()
         self.speculative_log: List[Dict] = []
+        self._min_requests_before_speculation = 6 if getattr(backend, 'backend_name', 'fake') == 'fake' else 10
+        self._speculation_cooldown_until = 0.0
+        self._recent_speculative_net_values: deque[float] = deque(maxlen=6)
+        self._effective_speculative_k = speculative_k
+        self._last_controller_metrics = {
+            'speculative_hits': 0,
+            'wasted_precomputes': 0,
+            'wasted_compute_ms': 0.0,
+            'useful_speculative_savings_ms': 0.0,
+        }
+        self.engine_metrics.update(
+            {
+                'speculation_cooldown_events': 0,
+                'speculation_paused_ticks': 0,
+                'speculation_enabled_final': True,
+                'effective_speculative_k_final': speculative_k,
+            }
+        )
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
@@ -632,6 +651,52 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         estimated_cost = self._estimate_full_cost_ms(len(decision_prefix))
         return decision_benefit_ms >= max(decision_cost_ms, 0.0) and estimated_cost >= self.tuning.min_estimated_saved_ms
 
+    def _refresh_speculation_controller(self) -> bool:
+        now = time.time()
+        snapshot = self.bank.snapshot_metrics()
+        delta_useful = float(snapshot.get('useful_speculative_savings_ms', 0.0)) - float(self._last_controller_metrics['useful_speculative_savings_ms'])
+        delta_waste = float(snapshot.get('wasted_compute_ms', 0.0)) - float(self._last_controller_metrics['wasted_compute_ms'])
+        delta_hits = int(snapshot.get('speculative_hits', 0)) - int(self._last_controller_metrics['speculative_hits'])
+        delta_wasted = int(snapshot.get('wasted_precomputes', 0)) - int(self._last_controller_metrics['wasted_precomputes'])
+
+        if delta_hits > 0 or delta_wasted > 0:
+            self._recent_speculative_net_values.append(delta_useful - delta_waste)
+        if delta_wasted > 0 and delta_useful <= delta_waste:
+            self._speculation_cooldown_until = max(self._speculation_cooldown_until, now + max(self.idle_threshold_ms / 1000.0, 0.25))
+            self.engine_metrics['speculation_cooldown_events'] = int(self.engine_metrics.get('speculation_cooldown_events', 0)) + 1
+
+        self._last_controller_metrics = {
+            'speculative_hits': int(snapshot.get('speculative_hits', 0)),
+            'wasted_precomputes': int(snapshot.get('wasted_precomputes', 0)),
+            'wasted_compute_ms': float(snapshot.get('wasted_compute_ms', 0.0)),
+            'useful_speculative_savings_ms': float(snapshot.get('useful_speculative_savings_ms', 0.0)),
+        }
+
+        requests_seen = int(self.engine_metrics.get('requests_seen', 0))
+        pending_speculative = int(snapshot.get('pending_speculative_entries', 0))
+        recent_net = sum(self._recent_speculative_net_values)
+        recent_count = len(self._recent_speculative_net_values)
+
+        if requests_seen < self._min_requests_before_speculation:
+            self._effective_speculative_k = 0
+        elif now < self._speculation_cooldown_until:
+            self._effective_speculative_k = 0
+        elif pending_speculative >= 1:
+            self._effective_speculative_k = 0
+        elif recent_count >= 2 and recent_net <= 0.0:
+            self._effective_speculative_k = 0
+        elif recent_count >= 1 and recent_net < 12.0:
+            self._effective_speculative_k = 1
+        else:
+            self._effective_speculative_k = self.speculative_k
+
+        speculation_enabled = self._effective_speculative_k > 0
+        if not speculation_enabled:
+            self.engine_metrics['speculation_paused_ticks'] = int(self.engine_metrics.get('speculation_paused_ticks', 0)) + 1
+        self.engine_metrics['speculation_enabled_final'] = speculation_enabled
+        self.engine_metrics['effective_speculative_k_final'] = self._effective_speculative_k
+        return speculation_enabled
+
     def _loop(self) -> None:
         if not getattr(self.backend, 'supports_external_kv', True):
             return
@@ -640,9 +705,11 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
             idle_ms = (time.time() - self.last_request_time) * 1000.0
             if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
                 continue
+            if not self._refresh_speculation_controller():
+                continue
 
             prefer_gpu = self.enable_gpu_tier and idle_ms >= (self.idle_threshold_ms * 1.5)
-            decisions = self.policy.rank(self.bank, budget_k=self.speculative_k, prefer_gpu=prefer_gpu)
+            decisions = self.policy.rank(self.bank, budget_k=self._effective_speculative_k, prefer_gpu=prefer_gpu)
 
             for decision in decisions:
                 if self.serving_event.is_set() or self.stop_event.is_set():
