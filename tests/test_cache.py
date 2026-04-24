@@ -33,3 +33,16 @@ def test_default_prefix_lengths_tracks_dense_short_and_stride_long_prefixes():
     assert 40 in lengths
     assert 48 in lengths
     assert 64 in lengths
+
+
+def test_observe_query_respects_reusable_prefix_limit_and_tracks_branching():
+    bank = TieredStateBank(max_memory_bytes=4096, min_match_length=3)
+    tokens_a = (1, 2, 3, 4, 5, 6, 7, 8)
+    tokens_b = (1, 2, 3, 4, 9, 10, 11, 12)
+    bank.observe_query(tokens_a, tracked_prefix_lengths=[3, 4, 5, 6], reusable_prefix_limit=4, observed_at=10.0)
+    bank.observe_query(tokens_b, tracked_prefix_lengths=[3, 4, 5, 6], reusable_prefix_limit=4, observed_at=11.0)
+
+    assert bank.get_observation_count((1, 2, 3, 4)) == 2
+    assert bank.get_observation_count((1, 2, 3, 4, 5)) == 0
+    assert bank.branching_factor((1, 2, 3, 4)) == 2
+    assert bank.recent_arrival_rate() > 0.0

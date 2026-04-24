@@ -31,12 +31,13 @@ class FrequencyPolicy(SpeculationPolicy):
         tier = 'gpu' if prefer_gpu else 'cpu'
         decisions: List[SpeculationDecision] = []
         candidates = bank.get_candidate_stats(max_prefix_len=self.max_prefix_len, exclude_stored=True)
-        for prefix, freq, observations in candidates:
+        for prefix, freq, observations, branching_factor in candidates:
             if len(prefix) < self.min_prefix_len or freq < self.min_frequency or observations < self.min_observations:
                 continue
             effective_len = min(len(prefix), self.max_prefix_len)
             confidence = min(observations / 6.0, 1.0)
-            score = float(freq) * confidence * (1.0 + 0.08 * effective_len)
+            branch_bonus = 1.0 + 0.10 * min(max(branching_factor - 1, 0), 4)
+            score = float(freq) * confidence * branch_bonus * (1.0 + 0.08 * effective_len)
             decisions.append(
                 SpeculationDecision(
                     prefix_tokens=prefix,
@@ -83,6 +84,8 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         reuse_discount: float = 0.92,
         max_reuse_probability: float = 0.98,
         min_utility_score: float = 0.0,
+        reuse_horizon_s: float = 0.75,
+        branching_weight: float = 0.12,
     ):
         self.min_frequency = min_frequency
         self.ms_per_token = ms_per_token
@@ -105,6 +108,8 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         self.reuse_discount = reuse_discount
         self.max_reuse_probability = max_reuse_probability
         self.min_utility_score = min_utility_score
+        self.reuse_horizon_s = reuse_horizon_s
+        self.branching_weight = branching_weight
 
     def _estimate_memory_mb(self, prefix: Tuple[int, ...]) -> float:
         return max(len(prefix) * 0.0015, 0.002)
@@ -129,10 +134,25 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         probability = min(score * self.reuse_discount, self.max_reuse_probability)
         return max(probability, 0.0)
 
-    def _expected_saved_prefill_ms(self, prefix: Tuple[int, ...], reuse_probability: float) -> float:
+    def _expected_future_reuses(
+        self,
+        reuse_probability: float,
+        recent_support: float,
+        recent_streak: int,
+        branching_factor: int,
+        arrival_rate_rps: float,
+    ) -> float:
+        horizon_requests = max(arrival_rate_rps * self.reuse_horizon_s, 1.0)
+        streak_multiplier = 1.0 + 0.20 * min(recent_streak, 4)
+        support_multiplier = 1.0 + 0.75 * min(recent_support, 1.0)
+        branching_multiplier = 1.0 + self.branching_weight * min(max(branching_factor - 1, 0), 4)
+        future_reuses = reuse_probability * horizon_requests * streak_multiplier * support_multiplier * branching_multiplier
+        return max(min(future_reuses, horizon_requests * 1.5), reuse_probability)
+
+    def _expected_saved_prefill_ms(self, prefix: Tuple[int, ...], expected_future_reuses: float) -> float:
         effective_len = min(len(prefix), self.max_prefix_len)
         reusable_cost = self.fixed_prefill_overhead_ms + (effective_len * self.ms_per_token)
-        return float(reuse_probability * reusable_cost * self._length_quality(effective_len))
+        return float(expected_future_reuses * reusable_cost * self._length_quality(effective_len))
 
     def _expected_cost_ms(self, prefix: Tuple[int, ...], bank: TieredStateBank, target_tier: str) -> float:
         estimated_memory_mb = self._estimate_memory_mb(prefix)
@@ -148,8 +168,9 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         decisions: List[SpeculationDecision] = []
         target_tier = 'gpu' if prefer_gpu else 'cpu'
         candidates = bank.get_candidate_stats(max_prefix_len=self.max_prefix_len, exclude_stored=True)
+        arrival_rate_rps = bank.recent_arrival_rate()
 
-        for prefix, freq, observations in candidates:
+        for prefix, freq, observations, branching_factor in candidates:
             if len(prefix) < self.min_prefix_len:
                 continue
             if float(freq) < self.min_frequency or observations < self.min_observations:
@@ -161,7 +182,14 @@ class CostAwareSlackPolicy(SpeculationPolicy):
             reuse_probability = self._reuse_probability(float(freq), observations, recent_support, recent_streak)
             if reuse_probability <= 0.0:
                 continue
-            expected_benefit = self._expected_saved_prefill_ms(prefix, reuse_probability)
+            expected_future_reuses = self._expected_future_reuses(
+                reuse_probability=reuse_probability,
+                recent_support=recent_support,
+                recent_streak=recent_streak,
+                branching_factor=branching_factor,
+                arrival_rate_rps=arrival_rate_rps,
+            )
+            expected_benefit = self._expected_saved_prefill_ms(prefix, expected_future_reuses)
             expected_cost = self._expected_cost_ms(prefix, bank, target_tier)
             expected_net = expected_benefit - expected_cost
             if expected_cost <= 0.0:
@@ -173,6 +201,7 @@ class CostAwareSlackPolicy(SpeculationPolicy):
             score = (
                 expected_net / max(expected_cost, 1e-6)
                 + 0.20 * reuse_probability
+                + 0.06 * min(max(branching_factor - 1, 0), 4)
                 + 0.08 * self._length_quality(len(prefix))
             )
             if score < self.min_utility_score:

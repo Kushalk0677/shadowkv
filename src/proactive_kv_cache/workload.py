@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -103,34 +103,56 @@ class SyntheticWorkloadGenerator:
             if self.burst_probability > 0 and self.rng.random() < self.burst_probability:
                 burst_len = min(self.burst_size, n_requests - i)
                 for _ in range(burst_len):
-                    rows.append(Request(request_id=i, prompt=self._sample_prompt(i), arrival_time=current_time))
+                    prompt, metadata = self._sample_prompt(i)
+                    rows.append(Request(request_id=i, prompt=prompt, arrival_time=current_time, metadata=metadata))
                     current_time += 0.008
                     i += 1
                 current_time += float(self.rng.exponential(self.mean_inter_arrival_ms * 4) / 1000.0)
                 continue
 
-            rows.append(Request(request_id=i, prompt=self._sample_prompt(i), arrival_time=current_time))
+            prompt, metadata = self._sample_prompt(i)
+            rows.append(Request(request_id=i, prompt=prompt, arrival_time=current_time, metadata=metadata))
             current_time += float(self.rng.exponential(self.mean_inter_arrival_ms) / 1000.0)
             i += 1
 
         return rows
 
-    def _sample_prompt(self, request_id: int) -> str:
+    def _sample_prompt(self, request_id: int) -> Tuple[str, Dict[str, object]]:
         if self.long_prefix_bias > 0 or self.rag_mode:
             t = int(self.rng.choice(len(LONG_SHARED_TEMPLATES), p=self.long_template_probs))
             case = str(self.rng.choice(CUSTOMER_CASES))
+            shared_prefix = LONG_SHARED_TEMPLATES[t]
             if self.rag_mode:
                 question = str(self.rng.choice(RAG_QUESTIONS))
                 variant_bucket = request_id % 5
-                return f"{LONG_SHARED_TEMPLATES[t]}{question}\nContext case: {case}\nVariant {variant_bucket}."
+                prompt = f"{shared_prefix}{question}\nContext case: {case}\nVariant {variant_bucket}."
+                return prompt, {
+                    'source_workload': 'synthetic',
+                    'variant': 'rag_long_context',
+                    'prompt_mode': 'rag',
+                    'shared_prefix_text': shared_prefix,
+                }
             variant_bucket = request_id % 7
             suffix = str(self.rng.choice(QUERY_SUFFIXES, p=self.suffix_probs))
-            return f"{LONG_SHARED_TEMPLATES[t]}{case} {suffix} Variant {variant_bucket}."
+            prompt = f"{shared_prefix}{case} {suffix} Variant {variant_bucket}."
+            return prompt, {
+                'source_workload': 'synthetic',
+                'variant': 'long_shared_prefix',
+                'prompt_mode': 'templated',
+                'shared_prefix_text': shared_prefix,
+            }
 
         t = int(self.rng.choice(len(SYSTEM_PROMPTS), p=self.template_probs))
         s = int(self.rng.choice(len(QUERY_SUFFIXES), p=self.suffix_probs))
         variant_bucket = request_id % 7
-        return f"{SYSTEM_PROMPTS[t]}{QUERY_SUFFIXES[s]} Variant {variant_bucket}."
+        shared_prefix = SYSTEM_PROMPTS[t]
+        prompt = f"{shared_prefix}{QUERY_SUFFIXES[s]} Variant {variant_bucket}."
+        return prompt, {
+            'source_workload': 'synthetic',
+            'variant': 'standard',
+            'prompt_mode': 'templated',
+            'shared_prefix_text': shared_prefix,
+        }
 
 
 SYNTHETIC_VARIANTS = {
@@ -158,10 +180,17 @@ def make_synthetic_workload(variant: str, n_requests: int, seed: int = 42, mean_
     return generator.generate(n_requests)
 
 
-def make_public_dataset_workload(dataset_name: str, split: str, n_requests: int, seed: int = 42, mean_inter_arrival_ms: float = 150.0) -> List[Request]:
+def make_public_dataset_workload(
+    dataset_name: str,
+    split: str,
+    n_requests: int,
+    seed: int = 42,
+    mean_inter_arrival_ms: float = 150.0,
+    prompt_mode: str = 'raw',
+) -> List[Request]:
     from .datasets import load_public_text_rows
 
-    rows = load_public_text_rows(dataset_name=dataset_name, split=split, limit=n_requests, seed=seed)
+    rows = load_public_text_rows(dataset_name=dataset_name, split=split, limit=n_requests, seed=seed, prompt_mode=prompt_mode)
     now = time.time()
     rng = np.random.default_rng(seed)
     current = now

@@ -205,6 +205,44 @@ class BaseEngine:
                 (1.0 - self._stats_alpha) * self.ewma_cache_reuse_overhead_ms + self._stats_alpha * inferred_overhead
             )
 
+    def _shared_prefix_hint(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> int | None:
+        if not metadata:
+            return None
+        hint = metadata.get('shared_prefix_hint_tokens')
+        if hint is None:
+            return None
+        try:
+            hint_len = int(hint)
+        except (TypeError, ValueError):
+            return None
+        if hint_len < self.bank.min_match_length:
+            return None
+        return min(len(tokens), hint_len)
+
+    def _tracked_prefix_lengths(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> List[int]:
+        hint_len = self._shared_prefix_hint(tokens, metadata)
+        if hint_len is None:
+            return self.bank.default_prefix_lengths(tokens)
+        hint_tokens = tokens[:hint_len]
+        lengths = set(self.bank.default_prefix_lengths(hint_tokens))
+        lengths.add(hint_len)
+        return sorted(length for length in lengths if self.bank.min_match_length <= length <= hint_len)
+
+    def _observe_request(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> None:
+        tracked_prefix_lengths = self._tracked_prefix_lengths(tokens, metadata)
+        self.bank.observe_query(
+            tokens,
+            tracked_prefix_lengths=tracked_prefix_lengths,
+            reusable_prefix_limit=self._shared_prefix_hint(tokens, metadata),
+            observed_at=float(metadata['arrival_time']) if metadata and metadata.get('arrival_time') is not None else None,
+        )
+
+    def _request_cacheable_prefix_limit(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> int:
+        hint_len = self._shared_prefix_hint(tokens, metadata)
+        if hint_len is None:
+            return min(len(tokens), self.tuning.max_cacheable_prefix_tokens)
+        return min(hint_len, self.tuning.max_cacheable_prefix_tokens)
+
     def _estimate_full_cost_ms(self, token_count: int) -> float:
         if token_count <= 0:
             return 0.0
@@ -221,8 +259,9 @@ class BaseEngine:
             penalty += 4.0
         return gross_saved - penalty - 0.10 * suffix_cost
 
-    def _reactive_prefix_len(self, tokens: Tuple[int, ...]) -> int:
-        candidate_lengths = self.bank.default_prefix_lengths(tokens)
+    def _reactive_prefix_len(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> int:
+        candidate_lengths = self._tracked_prefix_lengths(tokens, metadata)
+        max_cacheable_prefix = self._request_cacheable_prefix_limit(tokens, metadata)
         best_len = min(len(tokens), max(self.bank.min_match_length, self.tuning.min_store_prefix_tokens))
         best_score = float('-inf')
 
@@ -231,20 +270,26 @@ class BaseEngine:
                 length < self.bank.min_match_length
                 or length > len(tokens)
                 or length < self.tuning.min_store_prefix_tokens
-                or length > self.tuning.max_cacheable_prefix_tokens
+                or length > max_cacheable_prefix
             ):
                 continue
             prefix = tokens[:length]
             freq = self.bank.get_frequency(prefix)
+            branching = self.bank.branching_factor(prefix)
             coverage = length / max(len(tokens), 1)
-            score = (freq * (1.0 + 0.05 * min(length, 24))) + (0.5 * coverage) - (0.015 * max(length - 32, 0))
+            score = (
+                (freq * (1.0 + 0.05 * min(length, 24)))
+                + (0.5 * coverage)
+                + (0.04 * min(max(branching - 1, 0), 4))
+                - (0.015 * max(length - 32, 0))
+            )
             if score > best_score:
                 best_score = score
                 best_len = length
 
         return best_len
 
-    def _should_store_reactive_prefix(self, tokens: Tuple[int, ...], prefix_len: int) -> bool:
+    def _should_store_reactive_prefix(self, tokens: Tuple[int, ...], prefix_len: int, metadata: Dict | None = None) -> bool:
         self.engine_metrics['store_attempts'] += 1
         if not getattr(self.backend, 'supports_external_kv', True):
             self.engine_metrics['store_skips'] += 1
@@ -252,7 +297,7 @@ class BaseEngine:
         if len(tokens) < self.tuning.min_store_prefix_tokens:
             self.engine_metrics['store_skips'] += 1
             return False
-        if prefix_len < self.tuning.min_store_prefix_tokens or prefix_len > self.tuning.max_cacheable_prefix_tokens:
+        if prefix_len < self.tuning.min_store_prefix_tokens or prefix_len > self._request_cacheable_prefix_limit(tokens, metadata):
             self.engine_metrics['store_skips'] += 1
             return False
         freq = self.bank.get_frequency(tokens[:prefix_len])
@@ -266,9 +311,9 @@ class BaseEngine:
             return False
         return True
 
-    def _store_reactive_prefix(self, tokens: Tuple[int, ...], tier: str = 'cpu') -> float:
-        prefix_len = self._reactive_prefix_len(tokens)
-        if not self._should_store_reactive_prefix(tokens, prefix_len):
+    def _store_reactive_prefix(self, tokens: Tuple[int, ...], tier: str = 'cpu', metadata: Dict | None = None) -> float:
+        prefix_len = self._reactive_prefix_len(tokens, metadata)
+        if not self._should_store_reactive_prefix(tokens, prefix_len, metadata):
             return 0.0
         prefix = tokens[:prefix_len]
         prefill = self.backend.prefill(prefix)
@@ -355,8 +400,8 @@ class NoCacheEngine(BaseEngine):
         self.cache_enabled = False
         self.engine_metrics['cache_active_final'] = False
 
-    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...]) -> RequestResult:
-        self.bank.observe_query(tokens)
+    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
+        self._observe_request(tokens, metadata)
         out = self._prefill_full(tokens)
         return self._record(
             RequestResult(
@@ -378,8 +423,8 @@ class NativePrefixCachingEngine(BaseEngine):
         super().__init__(backend=backend, max_memory_mb=max_memory_mb, name='native_prefix_cache')
         self.engine_metrics['cache_active_final'] = True
 
-    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...]) -> RequestResult:
-        self.bank.observe_query(tokens)
+    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
+        self._observe_request(tokens, metadata)
         out = self._prefill_full(tokens)
         return self._record(
             RequestResult(
@@ -397,14 +442,14 @@ class ReactivePrefixCacheEngine(BaseEngine):
     def __init__(self, backend: Backend, max_memory_mb: int = 256):
         super().__init__(backend=backend, max_memory_mb=max_memory_mb, name='reactive_prefix_cache')
 
-    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...]) -> RequestResult:
-        self.bank.observe_query(tokens)
+    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
+        self._observe_request(tokens, metadata)
         match = self.bank.peek_match(tokens)
 
         if match is None:
             self.bank.record_miss()
             out = self._prefill_full(tokens)
-            store_latency_ms = self._store_reactive_prefix(tokens, tier='cpu') if self.cache_enabled else 0.0
+            store_latency_ms = self._store_reactive_prefix(tokens, tier='cpu', metadata=metadata) if self.cache_enabled else 0.0
             return self._record(
                 RequestResult(
                     request_id=request_id,
@@ -485,10 +530,10 @@ class GreedyPrefixCacheEngine(ReactivePrefixCacheEngine):
         self.tuning.min_prefix_coverage_ratio = 0.0
         self.tuning.max_cacheable_prefix_tokens = max(self.tuning.max_cacheable_prefix_tokens, 128)
 
-    def _reactive_prefix_len(self, tokens: Tuple[int, ...]) -> int:
-        return min(len(tokens), self.tuning.max_cacheable_prefix_tokens)
+    def _reactive_prefix_len(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> int:
+        return self._request_cacheable_prefix_limit(tokens, metadata)
 
-    def _should_store_reactive_prefix(self, tokens: Tuple[int, ...], prefix_len: int) -> bool:
+    def _should_store_reactive_prefix(self, tokens: Tuple[int, ...], prefix_len: int, metadata: Dict | None = None) -> bool:
         self.engine_metrics['store_attempts'] += 1
         if not getattr(self.backend, 'supports_external_kv', True):
             self.engine_metrics['store_skips'] += 1
@@ -533,11 +578,11 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
-    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...]) -> RequestResult:
+    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
         self.serving_event.set()
         self.last_request_time = time.time()
         try:
-            return super().serve_tokens(request_id, tokens)
+            return super().serve_tokens(request_id, tokens, metadata=metadata)
         finally:
             self.serving_event.clear()
 
@@ -649,16 +694,16 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         total_tokens = max(result.tokens_recomputed + result.matched_prefix_length, 1)
         self._recent_request_window.append((total_tokens, result.matched_prefix_length, result.was_cache_hit))
 
-    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...]) -> RequestResult:
+    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
         self.serving_event.set()
         self.last_request_time = time.time()
         try:
-            self.bank.observe_query(tokens)
+            self._observe_request(tokens, metadata)
             match = self.bank.peek_match(tokens)
             if match is None:
                 self.bank.record_miss()
                 out = self._prefill_full(tokens)
-                store_latency_ms = self._store_reactive_prefix(tokens, tier='gpu' if self.enable_gpu_tier else 'cpu')
+                store_latency_ms = self._store_reactive_prefix(tokens, tier='gpu' if self.enable_gpu_tier else 'cpu', metadata=metadata)
                 result = RequestResult(
                     request_id=request_id,
                     latency_ms=out.latency_ms + store_latency_ms,

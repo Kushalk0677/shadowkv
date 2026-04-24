@@ -45,6 +45,8 @@ class TieredStateBank:
         self.frequency_counter: Dict[Tuple[int, ...], float] = defaultdict(float)
         self.observation_count: Dict[Tuple[int, ...], int] = defaultdict(int)
         self.recent_queries: deque[Tuple[int, ...]] = deque(maxlen=48)
+        self.recent_query_times: deque[float] = deque(maxlen=48)
+        self.continuation_tokens: Dict[Tuple[int, ...], set[int]] = defaultdict(set)
         self.current_memory_bytes = 0
         self.metrics = {
             'hits': 0,
@@ -99,20 +101,39 @@ class TieredStateBank:
                 items.append((prefix, float(freq)))
             return items
 
-    def get_candidate_stats(self, max_prefix_len: int | None = None, exclude_stored: bool = True) -> List[Tuple[Tuple[int, ...], float, int]]:
+    def get_candidate_stats(self, max_prefix_len: int | None = None, exclude_stored: bool = True) -> List[Tuple[Tuple[int, ...], float, int, int]]:
         with self._lock:
-            items: List[Tuple[Tuple[int, ...], float, int]] = []
+            items: List[Tuple[Tuple[int, ...], float, int, int]] = []
             for prefix, freq in self.frequency_counter.items():
                 if exclude_stored and prefix in self.entries:
                     continue
                 if max_prefix_len is not None and len(prefix) > max_prefix_len:
                     continue
-                items.append((prefix, float(freq), int(self.observation_count.get(prefix, 0))))
+                items.append(
+                    (
+                        prefix,
+                        float(freq),
+                        int(self.observation_count.get(prefix, 0)),
+                        len(self.continuation_tokens.get(prefix, set())),
+                    )
+                )
             return items
 
     def recent_query_count(self) -> int:
         with self._lock:
             return len(self.recent_queries)
+
+    def recent_arrival_rate(self, window: int = 16) -> float:
+        with self._lock:
+            timestamps = list(self.recent_query_times)[-max(window, 2):]
+            if len(timestamps) < 2:
+                return 0.0
+            duration = max(timestamps[-1] - timestamps[0], 1e-6)
+            return max((len(timestamps) - 1) / duration, 0.0)
+
+    def branching_factor(self, prefix_tokens: Tuple[int, ...]) -> int:
+        with self._lock:
+            return len(self.continuation_tokens.get(prefix_tokens, set()))
 
     def recent_prefix_support(self, prefix_tokens: Tuple[int, ...], window: int = 16) -> float:
         with self._lock:
@@ -132,17 +153,27 @@ class TieredStateBank:
                     break
             return streak
 
-    def observe_query(self, tokens: Tuple[int, ...], tracked_prefix_lengths: Optional[List[int]] = None) -> None:
-        tracked_prefix_lengths = tracked_prefix_lengths or self._default_prefix_lengths(tokens)
+    def observe_query(
+        self,
+        tokens: Tuple[int, ...],
+        tracked_prefix_lengths: Optional[List[int]] = None,
+        reusable_prefix_limit: int | None = None,
+        observed_at: float | None = None,
+    ) -> None:
+        effective_limit = min(len(tokens), reusable_prefix_limit) if reusable_prefix_limit is not None else len(tokens)
+        tracked_prefix_lengths = tracked_prefix_lengths or self._default_prefix_lengths(tokens[:effective_limit])
         with self._lock:
             self.recent_queries.append(tokens)
+            self.recent_query_times.append(observed_at if observed_at is not None else time.time())
             for length in tracked_prefix_lengths:
-                if length < self.min_match_length or length > len(tokens):
+                if length < self.min_match_length or length > len(tokens) or length > effective_limit:
                     continue
                 prefix = tokens[:length]
                 old = self.frequency_counter[prefix]
                 self.frequency_counter[prefix] = self.ema_alpha + (1.0 - self.ema_alpha) * old
                 self.observation_count[prefix] += 1
+                if length < len(tokens):
+                    self.continuation_tokens[prefix].add(tokens[length])
 
     def peek_match(self, tokens: Tuple[int, ...]) -> Optional[Tuple[Tuple[int, ...], CacheEntry, int]]:
         with self._lock:
@@ -272,7 +303,8 @@ class TieredStateBank:
                 if max_prefix_len is not None and len(prefix) > max_prefix_len:
                     continue
                 effective_len = min(len(prefix), 16)
-                score = float(freq) * (1.0 + 0.08 * effective_len)
+                branch_bonus = 1.0 + 0.10 * min(len(self.continuation_tokens.get(prefix, set())), 4)
+                score = float(freq) * branch_bonus * (1.0 + 0.08 * effective_len)
                 items.append((prefix, score))
             items.sort(key=lambda x: (-x[1], len(x[0])))
             return [prefix for prefix, _ in items[:k]]

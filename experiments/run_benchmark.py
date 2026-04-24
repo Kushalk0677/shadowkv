@@ -13,7 +13,7 @@ import json
 import statistics
 import time
 
-from proactive_kv_cache.datasets import list_datasets
+from proactive_kv_cache.datasets import list_datasets, list_prompt_modes
 from proactive_kv_cache.engines import (
     FrequencySpeculativeEngine,
     GreedyPrefixCacheEngine,
@@ -51,6 +51,7 @@ def resolve_model(model: str | None) -> str | None:
 
 
 def build_requests(args):
+    resolved_prompt_mode = getattr(args, 'resolved_prompt_mode', 'raw')
     if args.workload == 'synthetic':
         return make_synthetic_workload(
             variant=args.variant,
@@ -65,8 +66,17 @@ def build_requests(args):
             n_requests=args.n_requests,
             seed=args.seed,
             mean_inter_arrival_ms=args.mean_inter_arrival_ms or 150.0,
+            prompt_mode=resolved_prompt_mode,
         )
     raise ValueError(f'Unsupported workload: {args.workload}')
+
+
+def resolve_prompt_mode(args) -> str:
+    if args.prompt_mode != 'auto':
+        return args.prompt_mode
+    if args.workload == 'public_dataset':
+        return 'templated'
+    return 'raw'
 
 
 def maybe_sleep(current_idx: int, requests, simulate_arrivals: bool, max_sleep_ms: float) -> None:
@@ -111,8 +121,11 @@ def _profile_shadowkv_costs(backend) -> dict:
         return {
             'profile_lengths': [],
             'profile_latencies_ms': [],
+            'profile_ms_per_token': [],
             'token_benefit_ms': estimate,
             'speculation_penalty_ms': max(estimate * 4.0, 2.0),
+            'ms_per_token': estimate,
+            'fixed_prefill_overhead_ms': max(estimate * 4.0, 2.0),
         }
 
     measured_ms_per_token = [lat / max(length, 1) for length, lat in zip(lengths, latencies)]
@@ -133,15 +146,18 @@ def _profile_shadowkv_costs(backend) -> dict:
         'profile_ms_per_token': measured_ms_per_token,
         'token_benefit_ms': float(token_benefit_ms),
         'speculation_penalty_ms': float(speculation_penalty_ms),
+        'ms_per_token': float(token_benefit_ms),
+        'fixed_prefill_overhead_ms': float(speculation_penalty_ms),
     }
 
 
-def _build_shadowkv_policy_kwargs(backend) -> dict:
+def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[dict, dict]:
     calibration = _profile_shadowkv_costs(backend)
-    token_benefit_ms = calibration['token_benefit_ms']
-    speculation_penalty_ms = calibration['speculation_penalty_ms']
+    token_benefit_ms = calibration['ms_per_token']
+    speculation_penalty_ms = calibration['fixed_prefill_overhead_ms']
+    scaffold_mode = prompt_mode in ('templated', 'rag')
     if backend.device.startswith('cuda'):
-        return {
+        policy_kwargs = {
             'min_frequency': 0.16,
             'ms_per_token': token_benefit_ms,
             'fixed_prefill_overhead_ms': speculation_penalty_ms,
@@ -162,8 +178,17 @@ def _build_shadowkv_policy_kwargs(backend) -> dict:
             'global_frequency_weight': 0.22,
             'reuse_discount': 0.95,
             'min_utility_score': 0.02,
+            'reuse_horizon_s': 1.35 if prompt_mode == 'rag' else (1.05 if scaffold_mode else 0.75),
+            'branching_weight': 0.14 if scaffold_mode else 0.10,
         }
-    return {
+        if scaffold_mode:
+            policy_kwargs['min_frequency'] = 0.12
+            policy_kwargs['min_observations'] = 2
+            policy_kwargs['min_recent_support'] = 0.02
+            policy_kwargs['min_expected_net_ms'] = max(0.5, token_benefit_ms * 4.0)
+            policy_kwargs['max_admissions_per_idle'] = 3
+        return policy_kwargs, calibration
+    policy_kwargs = {
         'min_frequency': 0.24,
         'ms_per_token': max(token_benefit_ms * 0.95, 0.2),
         'fixed_prefill_overhead_ms': max(speculation_penalty_ms * 1.1, 2.0),
@@ -184,12 +209,24 @@ def _build_shadowkv_policy_kwargs(backend) -> dict:
         'global_frequency_weight': 0.24,
         'reuse_discount': 0.92,
         'min_utility_score': 0.04,
+        'reuse_horizon_s': 1.10 if prompt_mode == 'rag' else (0.90 if scaffold_mode else 0.60),
+        'branching_weight': 0.14 if scaffold_mode else 0.10,
     }
+    if scaffold_mode:
+        policy_kwargs['min_frequency'] = 0.18
+        policy_kwargs['min_observations'] = 3
+        policy_kwargs['min_recent_support'] = 0.02
+        policy_kwargs['min_expected_net_ms'] = max(3.0, token_benefit_ms * 5.0)
+    return policy_kwargs, calibration
 
 
 def build_engines(args, backend):
-    shadowkv_policy_kwargs = _build_shadowkv_policy_kwargs(backend) if args.include_experimental and getattr(backend, 'supports_external_kv', True) else None
-    args.shadowkv_policy_calibration = shadowkv_policy_kwargs
+    shadowkv_policy_kwargs = None
+    shadowkv_policy_calibration = None
+    if args.include_experimental and getattr(backend, 'supports_external_kv', True):
+        shadowkv_policy_kwargs, shadowkv_policy_calibration = _build_shadowkv_policy_kwargs(backend, prompt_mode=args.resolved_prompt_mode)
+    args.shadowkv_policy_calibration = shadowkv_policy_calibration
+    args.shadowkv_policy_kwargs = shadowkv_policy_kwargs
     engines = [NoCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)]
 
     if getattr(backend, 'supports_native_prefix_caching', False):
@@ -237,6 +274,7 @@ def main() -> None:
     parser.add_argument('--workload', choices=['synthetic', 'public_dataset'], default='synthetic')
     parser.add_argument('--variant', choices=sorted(SYNTHETIC_VARIANTS.keys()), default='high_skew')
     parser.add_argument('--dataset', choices=list_datasets(), default='daily_dialog')
+    parser.add_argument('--prompt_mode', choices=['auto', *list_prompt_modes()], default='auto')
     parser.add_argument('--dataset_split', default=None)
     parser.add_argument('--n_requests', type=int, default=60)
     parser.add_argument('--simulate_arrivals', dest='simulate_arrivals', action='store_true')
@@ -250,6 +288,7 @@ def main() -> None:
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output_dir', default='results')
     args = parser.parse_args()
+    args.resolved_prompt_mode = resolve_prompt_mode(args)
 
     set_seed(args.seed)
     backend = load_backend(
@@ -262,12 +301,22 @@ def main() -> None:
     )
     requests = build_requests(args)
     engines = build_engines(args, backend)
+    shared_prefix_token_cache = {}
 
     for engine in engines:
         for idx, req in enumerate(requests):
             maybe_sleep(idx, requests, args.simulate_arrivals, args.max_arrival_sleep_ms)
             tokens = backend.tokenize(req.prompt)
-            engine.serve_tokens(req.request_id, tokens)
+            metadata = dict(req.metadata or {})
+            metadata['arrival_time'] = req.arrival_time
+            shared_prefix_text = metadata.get('shared_prefix_text')
+            if shared_prefix_text:
+                hint_len = shared_prefix_token_cache.get(shared_prefix_text)
+                if hint_len is None:
+                    hint_len = len(backend.tokenize(shared_prefix_text))
+                    shared_prefix_token_cache[shared_prefix_text] = hint_len
+                metadata['shared_prefix_hint_tokens'] = min(int(hint_len), len(tokens))
+            engine.serve_tokens(req.request_id, tokens, metadata=metadata)
         maybe_shutdown(engine)
 
     summary = compare_named_runs(engines)
@@ -281,7 +330,11 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     model_slug = (resolve_model(args.model) or args.model or 'default').replace('/', '_').replace(':', '_')
-    workload_slug = args.dataset if args.workload == 'public_dataset' else args.variant
+    workload_slug = (
+        f"{args.dataset}_{args.resolved_prompt_mode}"
+        if args.workload == 'public_dataset'
+        else args.variant
+    )
     name = f"benchmark_{args.backend}_{model_slug}_{args.workload}_{workload_slug}_{args.device.replace(':', '_')}.json"
     out_file = output_dir / name
     out_file.write_text(json.dumps(summary, indent=2))
