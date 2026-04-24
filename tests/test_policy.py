@@ -12,7 +12,7 @@ def test_policy_returns_ranked_candidates():
     policy = CostAwareSlackPolicy(
         min_frequency=0.10,
         benefit_cost_ratio=0.20,
-        speculation_penalty_ms=1.0,
+        fixed_prefill_overhead_ms=1.0,
         memory_penalty_per_mb=0.1,
         max_admissions_per_idle=2,
         min_prefix_len=3,
@@ -49,7 +49,7 @@ def test_policy_prefers_recently_active_prefixes():
     policy = CostAwareSlackPolicy(
         min_frequency=0.10,
         benefit_cost_ratio=0.10,
-        speculation_penalty_ms=1.0,
+        fixed_prefill_overhead_ms=1.0,
         memory_penalty_per_mb=0.1,
         max_admissions_per_idle=2,
         min_prefix_len=3,

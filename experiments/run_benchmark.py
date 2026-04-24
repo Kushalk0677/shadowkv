@@ -140,42 +140,50 @@ def _build_shadowkv_policy_kwargs(backend) -> dict:
     calibration = _profile_shadowkv_costs(backend)
     token_benefit_ms = calibration['token_benefit_ms']
     speculation_penalty_ms = calibration['speculation_penalty_ms']
-    streak_bonus_ms = max(token_benefit_ms * 4.0, speculation_penalty_ms * 0.35)
-    weak_recent_penalty_ms = max(token_benefit_ms * 3.0, speculation_penalty_ms * 0.65)
     if backend.device.startswith('cuda'):
         return {
             'min_frequency': 0.16,
-            'token_benefit_ms': token_benefit_ms,
-            'speculation_penalty_ms': speculation_penalty_ms,
+            'ms_per_token': token_benefit_ms,
+            'fixed_prefill_overhead_ms': speculation_penalty_ms,
             'memory_penalty_per_mb': 0.75,
-            'gpu_bonus_ms': max(speculation_penalty_ms * 0.5, token_benefit_ms * 3.0),
-            'benefit_cost_ratio': 0.95,
+            'idle_cost_fraction': 0.55,
+            'gpu_idle_cost_fraction': 0.30,
+            'benefit_cost_ratio': 0.92,
             'max_admissions_per_idle': 2,
             'min_prefix_len': 16,
             'preferred_prefix_len': 64,
             'max_prefix_len': 192,
             'min_observations': 3,
-            'min_expected_net_ms': max(1.0, speculation_penalty_ms * 0.25),
+            'min_expected_net_ms': max(1.0, token_benefit_ms * 6.0),
             'min_recent_support': 0.04,
-            'streak_bonus_ms': streak_bonus_ms,
-            'weak_recent_penalty_ms': weak_recent_penalty_ms,
+            'recent_support_weight': 0.60,
+            'recent_streak_weight': 0.22,
+            'observation_weight': 0.18,
+            'global_frequency_weight': 0.22,
+            'reuse_discount': 0.95,
+            'min_utility_score': 0.02,
         }
     return {
         'min_frequency': 0.24,
-        'token_benefit_ms': max(token_benefit_ms * 0.95, 0.2),
-        'speculation_penalty_ms': max(speculation_penalty_ms * 1.1, 2.0),
+        'ms_per_token': max(token_benefit_ms * 0.95, 0.2),
+        'fixed_prefill_overhead_ms': max(speculation_penalty_ms * 1.1, 2.0),
         'memory_penalty_per_mb': 0.90,
-        'gpu_bonus_ms': 2.0,
+        'idle_cost_fraction': 0.75,
+        'gpu_idle_cost_fraction': 0.75,
         'benefit_cost_ratio': 1.35,
         'max_admissions_per_idle': 2,
         'min_prefix_len': 12,
         'preferred_prefix_len': 48,
         'max_prefix_len': 128,
         'min_observations': 4,
-        'min_expected_net_ms': max(6.0, speculation_penalty_ms * 0.9),
+        'min_expected_net_ms': max(6.0, token_benefit_ms * 8.0),
         'min_recent_support': 0.04,
-        'streak_bonus_ms': streak_bonus_ms,
-        'weak_recent_penalty_ms': weak_recent_penalty_ms,
+        'recent_support_weight': 0.58,
+        'recent_streak_weight': 0.20,
+        'observation_weight': 0.18,
+        'global_frequency_weight': 0.24,
+        'reuse_discount': 0.92,
+        'min_utility_score': 0.04,
     }
 
 

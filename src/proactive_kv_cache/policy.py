@@ -51,32 +51,45 @@ class FrequencyPolicy(SpeculationPolicy):
 
 
 class CostAwareSlackPolicy(SpeculationPolicy):
-    """Rank prefixes that look worth precomputing during idle time."""
+    """Rank prefixes by expected utility during idle time.
+
+    The model is:
+        expected_utility = expected_saved_prefill_ms - discounted_speculative_cost_ms
+
+    where expected_saved_prefill_ms is driven by a reuse probability estimate built
+    from global frequency, recent support, recent streaks, and observation count.
+    """
 
     def __init__(
         self,
         min_frequency: float = 0.18,
-        token_benefit_ms: float = 1.2,
-        speculation_penalty_ms: float = 5.0,
+        ms_per_token: float = 1.2,
+        fixed_prefill_overhead_ms: float = 5.0,
         memory_penalty_per_mb: float = 0.9,
-        gpu_bonus_ms: float = 4.0,
-        benefit_cost_ratio: float = 1.35,
+        idle_cost_fraction: float = 0.50,
+        gpu_idle_cost_fraction: float = 0.35,
+        benefit_cost_ratio: float = 1.05,
         max_admissions_per_idle: int = 1,
         min_prefix_len: int = 12,
         preferred_prefix_len: int = 48,
         max_prefix_len: int = 128,
         min_observations: int = 3,
-        min_expected_net_ms: float = 12.0,
+        min_expected_net_ms: float = 6.0,
         min_recent_support: float = 0.05,
-        recent_support_weight: float = 0.9,
-        streak_bonus_ms: float = 3.0,
-        weak_recent_penalty_ms: float = 4.0,
+        recent_support_weight: float = 0.55,
+        recent_streak_weight: float = 0.20,
+        observation_weight: float = 0.20,
+        global_frequency_weight: float = 0.25,
+        reuse_discount: float = 0.92,
+        max_reuse_probability: float = 0.98,
+        min_utility_score: float = 0.0,
     ):
         self.min_frequency = min_frequency
-        self.token_benefit_ms = token_benefit_ms
-        self.speculation_penalty_ms = speculation_penalty_ms
+        self.ms_per_token = ms_per_token
+        self.fixed_prefill_overhead_ms = fixed_prefill_overhead_ms
         self.memory_penalty_per_mb = memory_penalty_per_mb
-        self.gpu_bonus_ms = gpu_bonus_ms
+        self.idle_cost_fraction = idle_cost_fraction
+        self.gpu_idle_cost_fraction = gpu_idle_cost_fraction
         self.benefit_cost_ratio = benefit_cost_ratio
         self.max_admissions_per_idle = max_admissions_per_idle
         self.min_prefix_len = min_prefix_len
@@ -86,54 +99,50 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         self.min_expected_net_ms = min_expected_net_ms
         self.min_recent_support = min_recent_support
         self.recent_support_weight = recent_support_weight
-        self.streak_bonus_ms = streak_bonus_ms
-        self.weak_recent_penalty_ms = weak_recent_penalty_ms
+        self.recent_streak_weight = recent_streak_weight
+        self.observation_weight = observation_weight
+        self.global_frequency_weight = global_frequency_weight
+        self.reuse_discount = reuse_discount
+        self.max_reuse_probability = max_reuse_probability
+        self.min_utility_score = min_utility_score
 
     def _estimate_memory_mb(self, prefix: Tuple[int, ...]) -> float:
         return max(len(prefix) * 0.0015, 0.002)
 
-    def _template_bonus(self, prefix_len: int, observations: int) -> float:
+    def _length_quality(self, prefix_len: int) -> float:
         if prefix_len < self.min_prefix_len:
-            return -999.0
-        bonus = 0.0
+            return 0.0
         if prefix_len <= self.preferred_prefix_len:
-            bonus += 6.0
-        elif prefix_len <= self.max_prefix_len:
-            bonus += 3.0
-        else:
-            bonus -= 8.0
-        bonus += min(observations, 8) * 0.8
-        return bonus
+            return 1.0
+        overflow = prefix_len - self.preferred_prefix_len
+        return max(0.45, 1.0 - 0.01 * overflow)
 
-    def _expected_benefit_ms(
-        self,
-        prefix: Tuple[int, ...],
-        freq: float,
-        observations: int,
-        target_tier: str,
-        recent_support: float,
-        recent_streak: int,
-    ) -> float:
-        effective_len = min(len(prefix), self.max_prefix_len)
+    def _reuse_probability(self, freq: float, observations: int, recent_support: float, recent_streak: int) -> float:
         observation_confidence = min(observations / max(self.min_observations + 2, 1), 1.0)
-        recency_confidence = min(0.25 + self.recent_support_weight * recent_support + 0.10 * min(recent_streak, 4), 1.25)
-        confidence = min(observation_confidence * recency_confidence, 1.25)
-        benefit = freq * confidence * effective_len * self.token_benefit_ms
-        benefit += self._template_bonus(len(prefix), observations)
-        benefit += min(recent_streak, 3) * self.streak_bonus_ms
-        if recent_support < self.min_recent_support:
-            benefit -= self.weak_recent_penalty_ms
-        if target_tier == 'gpu':
-            benefit += self.gpu_bonus_ms
-        return float(benefit)
+        streak_signal = min(recent_streak / 4.0, 1.0)
+        score = (
+            self.global_frequency_weight * min(freq, 1.0)
+            + self.recent_support_weight * min(recent_support, 1.0)
+            + self.recent_streak_weight * streak_signal
+            + self.observation_weight * observation_confidence
+        )
+        probability = min(score * self.reuse_discount, self.max_reuse_probability)
+        return max(probability, 0.0)
+
+    def _expected_saved_prefill_ms(self, prefix: Tuple[int, ...], reuse_probability: float) -> float:
+        effective_len = min(len(prefix), self.max_prefix_len)
+        reusable_cost = self.fixed_prefill_overhead_ms + (effective_len * self.ms_per_token)
+        return float(reuse_probability * reusable_cost * self._length_quality(effective_len))
 
     def _expected_cost_ms(self, prefix: Tuple[int, ...], bank: TieredStateBank, target_tier: str) -> float:
         estimated_memory_mb = self._estimate_memory_mb(prefix)
         memory_pressure = bank.get_memory_bytes() / max(bank.max_memory_bytes, 1)
-        pressure_multiplier = 1.0 + 1.5 * memory_pressure
-        length_penalty = max(len(prefix) - self.preferred_prefix_len, 0) * 0.08
-        tier_penalty = 1.5 if target_tier == 'gpu' else 0.0
-        return float((self.speculation_penalty_ms + estimated_memory_mb * self.memory_penalty_per_mb + length_penalty + tier_penalty) * pressure_multiplier)
+        pressure_multiplier = 1.0 + 1.25 * memory_pressure
+        effective_len = min(len(prefix), self.max_prefix_len)
+        prefill_cost = self.fixed_prefill_overhead_ms + (effective_len * self.ms_per_token)
+        idle_fraction = self.gpu_idle_cost_fraction if target_tier == 'gpu' else self.idle_cost_fraction
+        memory_cost = estimated_memory_mb * self.memory_penalty_per_mb
+        return float((prefill_cost * idle_fraction + memory_cost) * pressure_multiplier)
 
     def rank(self, bank: TieredStateBank, budget_k: int, prefer_gpu: bool = False) -> List[SpeculationDecision]:
         decisions: List[SpeculationDecision] = []
@@ -149,7 +158,10 @@ class CostAwareSlackPolicy(SpeculationPolicy):
             recent_streak = bank.recent_prefix_streak(prefix)
             if recent_support < self.min_recent_support and observations < (self.min_observations + 2):
                 continue
-            expected_benefit = self._expected_benefit_ms(prefix, float(freq), observations, target_tier, recent_support, recent_streak)
+            reuse_probability = self._reuse_probability(float(freq), observations, recent_support, recent_streak)
+            if reuse_probability <= 0.0:
+                continue
+            expected_benefit = self._expected_saved_prefill_ms(prefix, reuse_probability)
             expected_cost = self._expected_cost_ms(prefix, bank, target_tier)
             expected_net = expected_benefit - expected_cost
             if expected_cost <= 0.0:
@@ -159,12 +171,12 @@ class CostAwareSlackPolicy(SpeculationPolicy):
             if expected_benefit < self.benefit_cost_ratio * expected_cost:
                 continue
             score = (
-                (expected_net / expected_cost)
-                + (0.004 * min(len(prefix), self.preferred_prefix_len))
-                + min(observations, 10) * 0.02
-                + (0.20 * recent_support)
-                + (0.03 * min(recent_streak, 4))
+                expected_net / max(expected_cost, 1e-6)
+                + 0.20 * reuse_probability
+                + 0.08 * self._length_quality(len(prefix))
             )
+            if score < self.min_utility_score:
+                continue
             decisions.append(
                 SpeculationDecision(
                     prefix_tokens=prefix,
