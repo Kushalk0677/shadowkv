@@ -1,0 +1,931 @@
+[
+  {
+    "model": "tiny",
+    "dataset": "ag_news",
+    "exit_code": 0,
+    "elapsed_seconds": 23
+  },
+  {
+    "model": "tiny",
+    "dataset": "alpaca_eval",
+    "exit_code": 1,
+    "elapsed_seconds": 17.49
+  },
+  {
+    "model": "tiny",
+    "dataset": "banking77",
+    "exit_code": 1,
+    "elapsed_seconds": 16.8
+  },
+  {
+    "model": "tiny",
+    "dataset": "cnn_dailymail",
+    "exit_code": 0,
+    "elapsed_seconds": 22.65
+  },
+  {
+    "model": "tiny",
+    "dataset": "daily_dialog",
+    "exit_code": 0,
+    "elapsed_seconds": 20.13
+  },
+  {
+    "model": "tiny",
+    "dataset": "ag_news",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_ag_news_cpu.json",
+    "status": "skipped_existing",
+    "elapsed_seconds": 0.0,
+    "summary": {
+      "winner": "strict_reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 2.5454562510276446,
+          "p95_latency_ms": 5.116075015394017,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 2.5959187496482627,
+          "p95_latency_ms": 3.5737749858526513,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9805608327966907
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 2.333618749617017,
+          "p95_latency_ms": 3.2543249981245026,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.090776396720927
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 2.4309562486450886,
+          "p95_latency_ms": 3.2152249914361164,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0471008075305237
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 2.585049998742761,
+          "p95_latency_ms": 4.8622000103932805,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9846835659912292
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "ag_news",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_ag_news_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 27.91,
+    "exit_code": 0,
+    "summary": {
+      "winner": "reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 100.3476750011032,
+          "p95_latency_ms": 198.8800250182976,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 69.30360625119647,
+          "p95_latency_ms": 105.72202502225991,
+          "hit_rate": 0.8125,
+          "reuse_success_rate": 0.9285714285714286,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.4479430498520527
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 80.25734375223692,
+          "p95_latency_ms": 113.24407502252143,
+          "hit_rate": 0.25,
+          "reuse_success_rate": 0.2857142857142857,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.250323899466288
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 71.1001000017859,
+          "p95_latency_ms": 110.78542500763433,
+          "hit_rate": 0.8125,
+          "reuse_success_rate": 0.9285714285714286,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.411357719589461
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 70.48648750424036,
+          "p95_latency_ms": 114.9603999874671,
+          "hit_rate": 0.8125,
+          "reuse_success_rate": 0.9285714285714286,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.4236441416529153
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "alpaca_eval",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_alpaca_eval_cpu.json",
+    "status": "failed",
+    "elapsed_seconds": 17.15,
+    "exit_code": 1,
+    "log_file": "results\\cpu_matrix_20260422\\logs\\tiny_alpaca_eval.log"
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "alpaca_eval",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_alpaca_eval_cpu.json",
+    "status": "failed",
+    "elapsed_seconds": 15.59,
+    "exit_code": 1,
+    "log_file": "results\\cpu_matrix_20260422\\logs\\distilgpt2_alpaca_eval.log"
+  },
+  {
+    "model": "tiny",
+    "dataset": "banking77",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_banking77_cpu.json",
+    "status": "failed",
+    "elapsed_seconds": 15.92,
+    "exit_code": 1,
+    "log_file": "results\\cpu_matrix_20260422\\logs\\tiny_banking77.log"
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "banking77",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_banking77_cpu.json",
+    "status": "failed",
+    "elapsed_seconds": 15.95,
+    "exit_code": 1,
+    "log_file": "results\\cpu_matrix_20260422\\logs\\distilgpt2_banking77.log"
+  },
+  {
+    "model": "tiny",
+    "dataset": "cnn_dailymail",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_cnn_dailymail_cpu.json",
+    "status": "skipped_existing",
+    "elapsed_seconds": 0.0,
+    "summary": {
+      "winner": "frequency_speculative",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 11.216974999115337,
+          "p95_latency_ms": 18.308649996470194,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 7.218049997391063,
+          "p95_latency_ms": 8.744600010686554,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.5540173596982108
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 7.08972500069649,
+          "p95_latency_ms": 7.798274993547238,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.5821452874425157
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 6.991712501985603,
+          "p95_latency_ms": 8.72362498921575,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.604324404919365
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 7.306524998057284,
+          "p95_latency_ms": 8.123399988107849,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.5351997019236632
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "cnn_dailymail",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_cnn_dailymail_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 53.29,
+    "exit_code": 0,
+    "summary": {
+      "winner": "strict_reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 350.8460437551548,
+          "p95_latency_ms": 455.38382500672014,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 352.90510625236493,
+          "p95_latency_ms": 470.00482500880025,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9941653933005502
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 344.1989062503126,
+          "p95_latency_ms": 431.28822497237707,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0193119076909798
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 497.5931249973655,
+          "p95_latency_ms": 860.2336500043748,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.7050861961909388
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 374.0005062427372,
+          "p95_latency_ms": 452.4420499947155,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9380897562941949
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "daily_dialog",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_daily_dialog_cpu.json",
+    "status": "skipped_existing",
+    "elapsed_seconds": 0.0,
+    "summary": {
+      "winner": "shadow_kv",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 3.910831244866131,
+          "p95_latency_ms": 6.991149995883461,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 3.0753250011912314,
+          "p95_latency_ms": 4.301775014027953,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.2716806332180388
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 3.348656244270387,
+          "p95_latency_ms": 4.581799985317048,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.1678807735364403
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 3.24501249815512,
+          "p95_latency_ms": 5.296175004332326,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.2051821825307445
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 2.6280437523382716,
+          "p95_latency_ms": 4.113075003260747,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.4881149681722436
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "daily_dialog",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_daily_dialog_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 28.69,
+    "exit_code": 0,
+    "summary": {
+      "winner": "reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 102.70685625073384,
+          "p95_latency_ms": 162.31737500493182,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 88.15543124546821,
+          "p95_latency_ms": 164.24302501400234,
+          "hit_rate": 0.5,
+          "reuse_success_rate": 0.5333333333333333,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.1650655529634615
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 91.74036249351047,
+          "p95_latency_ms": 163.7235750022228,
+          "hit_rate": 0.5,
+          "reuse_success_rate": 0.5333333333333333,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.1195383739409042
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 109.80387499876088,
+          "p95_latency_ms": 189.53804999910062,
+          "hit_rate": 0.5625,
+          "reuse_success_rate": 0.6,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9353664089895996
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 101.74433749853051,
+          "p95_latency_ms": 172.31602498941356,
+          "hit_rate": 0.625,
+          "reuse_success_rate": 0.6666666666666666,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 1.0094601702253674
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "dolly",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_dolly_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 24.44,
+    "exit_code": 0,
+    "summary": {
+      "winner": "reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 3.6616750003304332,
+          "p95_latency_ms": 7.0225000163191,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 2.5199000010616146,
+          "p95_latency_ms": 3.6297999904491007,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.453103297268859
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 3.004656253324356,
+          "p95_latency_ms": 6.549800003995188,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.2186668595714238
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 3.0004062500665896,
+          "p95_latency_ms": 5.521024992049206,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.2203930718545757
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 3.065431254071882,
+          "p95_latency_ms": 5.792125011794269,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.1945056655459316
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "dolly",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_dolly_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 27.94,
+    "exit_code": 0,
+    "summary": {
+      "winner": "reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 97.05097500227566,
+          "p95_latency_ms": 215.91074998286786,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 92.52141874640074,
+          "p95_latency_ms": 209.5134499904816,
+          "hit_rate": 0.4375,
+          "reuse_success_rate": 0.5,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0489568395864135
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 94.34288750162523,
+          "p95_latency_ms": 212.69922501960536,
+          "hit_rate": 0.4375,
+          "reuse_success_rate": 0.5,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0287047341073146
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 92.71398124838015,
+          "p95_latency_ms": 211.68947499973,
+          "hit_rate": 0.5,
+          "reuse_success_rate": 0.5714285714285714,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0467782064312041
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 95.19596874815761,
+          "p95_latency_ms": 219.56375000445405,
+          "hit_rate": 0.5,
+          "reuse_success_rate": 0.5714285714285714,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 1.0194861849562715
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "oasst1",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_oasst1_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 52.78,
+    "exit_code": 0,
+    "summary": {
+      "winner": "shadow_kv",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 5.629137500363868,
+          "p95_latency_ms": 15.266324997355696,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 6.197606244313647,
+          "p95_latency_ms": 19.06882499315543,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9082760792569947
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 5.2881937535858015,
+          "p95_latency_ms": 15.414924979268108,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.064472627642828
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 3.827381249720929,
+          "p95_latency_ms": 7.696524997300003,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.4707543181840879
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 3.5577374983404297,
+          "p95_latency_ms": 7.103900010406505,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.5822239563738696
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "oasst1",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_oasst1_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 31.8,
+    "exit_code": 0,
+    "summary": {
+      "winner": "reactive_prefix_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 148.13259999573347,
+          "p95_latency_ms": 353.6834499973338,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 142.58275624524686,
+          "p95_latency_ms": 363.8537000006181,
+          "hit_rate": 0.4375,
+          "reuse_success_rate": 0.5,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0389236671855375
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 149.57525625504786,
+          "p95_latency_ms": 385.72380002005957,
+          "hit_rate": 0.375,
+          "reuse_success_rate": 0.42857142857142855,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9903549805266291
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 151.49151875448297,
+          "p95_latency_ms": 408.98947501409566,
+          "hit_rate": 0.5,
+          "reuse_success_rate": 0.5714285714285714,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9778276778372446
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 147.7216187504382,
+          "p95_latency_ms": 377.68995002261363,
+          "hit_rate": 0.5,
+          "reuse_success_rate": 0.5714285714285714,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 1.0027821333720257
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "samsum",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_samsum_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 22.29,
+    "exit_code": 0,
+    "summary": {
+      "winner": "shadow_kv",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 5.80346875176474,
+          "p95_latency_ms": 13.756150008703116,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 6.0331125005177455,
+          "p95_latency_ms": 16.05347498843912,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9619361069873472
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 6.566268750248128,
+          "p95_latency_ms": 16.389475007599685,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.8838305242296757
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 7.293756252693129,
+          "p95_latency_ms": 18.873550012358464,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.7956762675777493
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 5.7359374968655175,
+          "p95_latency_ms": 10.536249996221159,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0117733596183929
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "samsum",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_samsum_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 39.82,
+    "exit_code": 0,
+    "summary": {
+      "winner": "frequency_speculative",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 260.76459374780825,
+          "p95_latency_ms": 425.82655000296654,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 196.2723750002624,
+          "p95_latency_ms": 337.23189999727765,
+          "hit_rate": 0.25,
+          "reuse_success_rate": 0.26666666666666666,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.3285853077768057
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 192.11666250339476,
+          "p95_latency_ms": 330.30922500620363,
+          "hit_rate": 0.0625,
+          "reuse_success_rate": 0.1111111111111111,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.3573241922376225
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 187.57273124720086,
+          "p95_latency_ms": 340.8238249976421,
+          "hit_rate": 0.25,
+          "reuse_success_rate": 0.26666666666666666,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 1.3902052393967026
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 249.72065625479445,
+          "p95_latency_ms": 431.8498500142596,
+          "hit_rate": 0.1875,
+          "reuse_success_rate": 0.2,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 1.0442251660661401
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "ultrachat",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_ultrachat_cpu.json",
+    "status": "failed",
+    "elapsed_seconds": 162.29,
+    "exit_code": 1,
+    "log_file": "results\\cpu_matrix_20260422\\logs\\tiny_ultrachat.log"
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "ultrachat",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_ultrachat_cpu.json",
+    "status": "failed",
+    "elapsed_seconds": 19.23,
+    "exit_code": 1,
+    "log_file": "results\\cpu_matrix_20260422\\logs\\distilgpt2_ultrachat.log"
+  },
+  {
+    "model": "tiny",
+    "dataset": "xsum",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_xsum_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 22.59,
+    "exit_code": 0,
+    "summary": {
+      "winner": "shadow_kv",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 12.220768756378675,
+          "p95_latency_ms": 18.625475015142,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 6.525468746986007,
+          "p95_latency_ms": 8.404674990742933,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.872780213992017
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 6.369356253344449,
+          "p95_latency_ms": 8.04287501523504,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.9186819311546188
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 6.716562496876577,
+          "p95_latency_ms": 9.099574999709148,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.8194975126132953
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 6.366262501614983,
+          "p95_latency_ms": 8.00107502436731,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.9196143346710146
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "xsum",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_xsum_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 43.52,
+    "exit_code": 0,
+    "summary": {
+      "winner": "no_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 276.82568125237594,
+          "p95_latency_ms": 370.81397500878666,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 277.19133125538065,
+          "p95_latency_ms": 362.1155750079197,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9986808750427053
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 284.2035062458308,
+          "p95_latency_ms": 364.07137499190867,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9740403449242699
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 289.72362500098825,
+          "p95_latency_ms": 367.64609999227105,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9554819053897716
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 293.8969500009989,
+          "p95_latency_ms": 377.7055750033469,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9419141003383501
+        }
+      }
+    }
+  },
+  {
+    "model": "tiny",
+    "dataset": "ultrachat",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_sshleifer_tiny-gpt2_public_dataset_ultrachat_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 21.72,
+    "exit_code": 0,
+    "summary": {
+      "winner": "frequency_speculative",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 9.856556252998416,
+          "p95_latency_ms": 17.403900012141094,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 20.215300002746517,
+          "p95_latency_ms": 47.531775002426,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.4875790243854542
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 8.252899995568441,
+          "p95_latency_ms": 14.659549982752651,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.194314272351669
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 6.717262500387733,
+          "p95_latency_ms": 7.6843500064569525,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.46734718978594
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 6.8239750053180614,
+          "p95_latency_ms": 8.57600001472747,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.4444009899387091
+        }
+      }
+    }
+  },
+  {
+    "model": "distilgpt2",
+    "dataset": "ultrachat",
+    "result_file": "results\\cpu_matrix_20260422\\benchmark_hf_distilgpt2_public_dataset_ultrachat_cpu.json",
+    "status": "completed",
+    "elapsed_seconds": 40.65,
+    "exit_code": 0,
+    "summary": {
+      "winner": "no_cache",
+      "engines": {
+        "no_cache": {
+          "mean_latency_ms": 252.6220062536595,
+          "p95_latency_ms": 281.2635250083986,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 1.0
+        },
+        "reactive_prefix_cache": {
+          "mean_latency_ms": 262.3431437568797,
+          "p95_latency_ms": 291.586549996282,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9629449530717331
+        },
+        "strict_reactive_prefix_cache": {
+          "mean_latency_ms": 269.08097499836003,
+          "p95_latency_ms": 327.85022498865146,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 0.0,
+          "speedup_vs_no_cache_mean": 0.9388326553194597
+        },
+        "frequency_speculative": {
+          "mean_latency_ms": 277.7090937488538,
+          "p95_latency_ms": 316.41737499739975,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9096641483484088
+        },
+        "shadow_kv": {
+          "mean_latency_ms": 278.85225000318314,
+          "p95_latency_ms": 336.8967749993317,
+          "hit_rate": 0.0,
+          "reuse_success_rate": 0.0,
+          "wasted_compute_ratio": 1.0,
+          "speedup_vs_no_cache_mean": 0.9059349754243539
+        }
+      }
+    }
+  }
+]

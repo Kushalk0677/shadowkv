@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: proactive-kv-cache
+Version: 0.3.0
+Summary: Research prototype for slack-stealing tiered prefix banking in LLM serving
+Requires-Python: >=3.10

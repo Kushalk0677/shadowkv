@@ -1,0 +1,6 @@
+"model","dataset","winner","winner_mean_ms","reactive_mean_ms","shadow_mean_ms","shadow_hit_rate","shadow_waste_ratio","shadow_speedup"
+"distilgpt2","alpaca_eval","no_cache","60.677","65.178","65.131","0.0","0.0","0.932"
+"tiny","alpaca_eval","strict_reactive_prefix_cache","1.604","1.678","1.786","0.0","0.0","1.206"
+"distilgpt2","banking77","shadow_kv","49.654","50.291","49.654","0.875","0.0","1.219"
+"tiny","banking77","shadow_kv","1.539","1.687","1.539","0.0","0.0","1.256"
+"distilgpt2","samsum","strict_reactive_prefix_cache","151.905","153.801","157.800","0.062","0.0","0.974"
