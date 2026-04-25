@@ -6,146 +6,276 @@
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
 
-\title{Notes on the ShadowKV Admission Policy}
+\title{Implementation Notes on the ShadowKV Admission Policy}
 \author{}
 \date{}
 
 \begin{document}
 \maketitle
 
-\section{Setup}
+\section{Purpose}
 
-Let $\mathcal{P}$ denote the set of observed token prefixes tracked by the system.
-For each prefix $p \in \mathcal{P}$ of length $L = |p|$, the system maintains:
+This note documents the \emph{implemented} ShadowKV admission policy used in the
+current prototype. The code is no longer a pure frequency thresholding scheme:
+it combines a cost-aware admission rule, a short-horizon reuse forecast, and a
+controller that decides when idle-time speculation should pause or reopen.
+
+\section{Tracked Signals}
+
+Let $\mathcal{P}$ be the set of observed prefixes. For each prefix $p \in \mathcal{P}$
+with length $L = |p|$, the system tracks:
 
 \begin{itemize}
-    \item $\hat{f}(p)$ is an exponential moving average (EMA) estimate of reuse frequency, updated as
+    \item $\hat{f}(p)$: an exponential moving average reuse frequency estimate
     \[
-        \hat{f}_t(p) = \alpha + (1 - \alpha)\,\hat{f}_{t-1}(p), \quad \alpha \in (0,1)
+        \hat{f}_t(p) = \alpha + (1-\alpha)\hat{f}_{t-1}(p)
     \]
-    where the update fires when a request whose token sequence begins with $p$ is observed.
+    whenever a request beginning with $p$ is observed.
 
-    \item $n(p)$ is the raw observation count for prefix $p$.
+    \item $n(p)$: the raw observation count.
+
+    \item $r(p) \in [0,1]$: recent support, i.e.\ the fraction of recent requests
+    in a sliding window that begin with $p$.
+
+    \item $s(p) \in \mathbb{Z}_{\ge 0}$: recent streak length, i.e.\ the number of
+    consecutive most recent requests beginning with $p$.
+
+    \item $b(p) \in \mathbb{Z}_{\ge 1}$: a branching factor derived from the number
+    of distinct continuation tokens observed after $p$.
+
+    \item $\lambda_{\mathrm{arr}}$: the recent arrival rate in requests per second.
 \end{itemize}
 
-\begin{definition}[Reuse probability estimate]
-Define the confidence-adjusted reuse probability as
+\section{Reuse Probability}
+
+\begin{definition}[Confidence-adjusted reuse probability]
+Let
 \[
-    \hat{P}(p) = \hat{f}(p) \cdot \gamma(p), \qquad
-    \gamma(p) = \min\!\left(\frac{n(p)}{n_{\min} + 2},\; 1\right)
+    c(p) = \min\!\left(\frac{n(p)}{n_{\min}+2},\, 1\right), \qquad
+    u(p) = \min\!\left(\frac{s(p)}{4},\, 1\right).
 \]
-where $n_{\min}$ is the minimum observation threshold.
-The factor $\gamma(p)$ shrinks the estimate toward zero when $p$ has been seen few times,
-penalising overconfident speculation on rare prefixes.
+The implementation forms a reuse score
+\[
+    q(p) =
+    w_f \min(\hat{f}(p),1)
+    + w_r \min(r(p),1)
+    + w_s u(p)
+    + w_n c(p),
+\]
+then defines
+\[
+    \hat{P}(p) = \min\!\left(d \cdot q(p),\, P_{\max}\right),
+\]
+where $d \in (0,1]$ is a reuse discount and $P_{\max} < 1$ is a cap on
+overconfidence.
 \end{definition}
+
+This differs from the earlier simplified note in two important ways:
+\begin{enumerate}
+    \item recent support and recent streak are first-class signals, not merely tie-breakers;
+    \item observation count contributes through confidence rather than by acting only
+    as a hard threshold.
+\end{enumerate}
+
+\section{Expected Future Reuses}
+
+The policy does not score a prefix on the basis of only \emph{one} possible reuse.
+Instead it predicts how many times that prefix may be reused over a short horizon.
+
+\begin{definition}[Expected future reuse count]
+Let $H > 0$ be the reuse horizon in seconds. Define the horizon request budget
+\[
+    N_H = \max(\lambda_{\mathrm{arr}} H,\, 0).
+\]
+Then the expected number of future reuses is approximated as
+\[
+    R(p) =
+    \hat{P}(p)\, N_H\,
+    \Bigl(1 + 0.20\min(s(p),4)\Bigr)\,
+    \Bigl(1 + 0.75\min(r(p),1)\Bigr)\,
+    \Bigl(1 + \omega_b \min(\max(b(p)-1,0),4)\Bigr),
+\]
+clipped to remain within a bounded multiple of $N_H$.
+\end{definition}
+
+This short-horizon reuse model is what lets ShadowKV speculate more aggressively
+when recent traffic is clustered and prefix reuse appears imminent.
 
 \section{Expected Benefit}
 
-When prefix $p$ is cached and a matching request arrives, the system avoids recomputing
-$L$ attention key-value pairs. Let $\beta > 0$ (ms per token) be the prefill cost per token.
+Let $\beta > 0$ denote the calibrated per-token prefill benefit and $c_0 > 0$ the
+fixed prefill overhead. The reusable prefill cost for a prefix of effective length
+$L_{\mathrm{eff}} = \min(L, L_{\max})$ is
+\[
+    G(p) = c_0 + \beta L_{\mathrm{eff}}.
+\]
+
+The implementation also uses a length-quality term
+\[
+    \ell(L) =
+    \begin{cases}
+        0, & L < L_{\min} \\
+        1, & L_{\min} \le L \le L^\star \\
+        \max(0.45,\, 1 - 0.01(L - L^\star)), & L > L^\star
+    \end{cases}
+\]
+to avoid over-rewarding very long speculative prefixes.
 
 \begin{definition}[Expected benefit]
 \[
-    B(p) = \hat{P}(p) \cdot \min(L,\, L_{\max}) \cdot \beta
+    B(p) = R(p)\, G(p)\, \ell(L_{\mathrm{eff}}).
 \]
-where $L_{\max}$ caps the prefix length beyond which marginal savings are diminished
-by memory pressure effects.
 \end{definition}
 
 \section{Expected Cost}
 
-Speculatively precomputing prefix $p$ during an idle window incurs two costs:
-
-\begin{enumerate}
-    \item A fixed overhead $c_0 > 0$ (ms) for scheduling and kernel launch.
-    \item A length-proportional compute cost and a memory pressure penalty.
-\end{enumerate}
-
-Let $m(p)$ (MB) denote the memory footprint of the KV state for $p$,
-and let $\rho \in [0,1]$ be the current memory utilisation ratio of the cache bank.
-
-\begin{definition}[Expected cost]
+Let $m(p)$ be the estimated KV footprint of prefix $p$ in MB, and let
+$\rho \in [0,1]$ denote cache-bank memory pressure. The implemented cost model is
 \[
-    C(p) = \left(c_0 + m(p)\cdot\delta + \max(L - L^*,\, 0)\cdot\lambda\right)
-    \cdot (1 + \mu\,\rho)
+    C(p) =
+    \Bigl(\iota \, G(p) + \delta\, m(p)\Bigr)\Bigl(1 + 1.25\,\rho\Bigr),
 \]
 where:
 \begin{itemize}
-    \item $\delta > 0$ is the memory penalty per MB
-    \item $\lambda > 0$ is the per-token length penalty beyond the preferred length $L^*$
-    \item $\mu > 0$ is the pressure multiplier scaling cost under memory contention
+    \item $\iota$ is an idle-cost discount, lower on GPU when idle cycles are available;
+    \item $\delta$ is a penalty per MB of speculative footprint.
 \end{itemize}
-The factor $(1 + \mu\rho)$ reflects that precomputing under high memory pressure
-is more expensive because it is likely to trigger evictions.
-\end{definition}
+
+Thus cost rises both with prefix length and with the likelihood that admission will
+increase eviction pressure.
 
 \section{Admission Rule}
 
-\begin{definition}[Net value and admission criterion]
-Define the expected net value of speculatively admitting prefix $p$ as
-\[
-    V(p) = B(p) - C(p)
-\]
-The admission policy admits $p$ if and only if all three conditions hold:
+\begin{definition}[Implemented admission rule]
+A prefix $p$ is admitted for speculative precompute only if all of the following hold:
 \begin{align}
-    \hat{f}(p) &\geq f_{\min} \tag{C1: frequency gate} \\
-    V(p) &\geq \tau \tag{C2: net value floor} \\
-    \frac{B(p)}{C(p)} &\geq \eta \tag{C3: benefit-cost ratio}
+    \hat{f}(p) &\ge f_{\min} \tag{A1: frequency gate} \\
+    n(p) &\ge n_{\min} \tag{A2: observation gate} \\
+    r(p) &\ge r_{\min} \quad \text{or} \quad n(p) \ge n_{\min}+2 \tag{A3: recent-support gate} \\
+    B(p) - C(p) &\ge \tau \tag{A4: net-gain floor} \\
+    B(p) &\ge \eta\, C(p) \tag{A5: benefit-cost ratio} \\
+    \sigma(p) &\ge \sigma_{\min} \tag{A6: utility-score floor}
 \end{align}
-for thresholds $f_{\min} > 0$, $\tau > 0$, and $\eta > 1$.
+where the utility score is
+\[
+    \sigma(p) =
+    \frac{B(p)-C(p)}{\max(C(p), \varepsilon)}
+    + 0.20\,\hat{P}(p)
+    + 0.06\,\min(\max(b(p)-1,0),4)
+    + 0.08\,\ell(L).
+\]
 \end{definition}
 
-Condition (C1) is a prior filter that blocks prefixes without sufficient frequency evidence.
-Condition (C2) ensures the absolute net gain exceeds a minimum useful threshold $\tau$.
-Condition (C3) provides a relative safety margin: even if $V(p) > \tau$,
-a low ratio $B/C$ indicates that a small overestimate of reuse probability
-would make the decision unprofitable.
+Compared with the original simpler formulation, this is a stricter \emph{economic}
+admission rule: a prefix must look both profitable in absolute terms and robust in
+ratio terms.
 
-\section{Ranking and Budget}
+\section{Dominance Pruning}
 
-Given a slack window of duration $W$ ms and a per-idle admission budget $K$,
-the policy selects at most $K$ prefixes from the admitted set.
-Candidates are ranked by the score
+The implementation removes dominated subprefixes before ranking. Informally, a shorter
+prefix $p$ is dropped when there exists a longer prefix $p'$ such that:
+\begin{itemize}
+    \item $p$ is a prefix of $p'$;
+    \item $p'$ has comparable or better recent support;
+    \item $p'$ has comparable or better reuse probability;
+    \item $p'$ has enough observation mass.
+\end{itemize}
 
+This prevents the budget from being wasted on weak subprefixes when a more specific
+continuation pattern is already well supported.
+
+\section{Controller Layer}
+
+Admission alone is not the whole story. ShadowKV also has a controller that decides
+whether idle-time speculation should run at all.
+
+\begin{definition}[Recent reuse density]
+Over a recent request window, let $T_{\mathrm{all}}$ be total tokens served and
+$T_{\mathrm{reused}}$ be total reused prefix tokens. Define
 \[
-    s(p) = \frac{V(p)}{C(p)} + \epsilon_1 \min(L, L^*) + \epsilon_2 \min(n(p), n_{\max})
+    D = \frac{T_{\mathrm{reused}}}{\max(T_{\mathrm{all}}, 1)}.
 \]
+\end{definition}
 
-where $\epsilon_1, \epsilon_2 \geq 0$ are small tie-breaking weights that
-favour longer and better-observed prefixes among candidates of similar value efficiency.
-The leading term $V(p)/C(p)$ is a return-on-investment ratio:
-it selects prefixes that yield the most net value per unit of speculative compute spent.
+Earlier versions leaned too heavily on $D$. That worked reasonably well for short
+templated requests, but it was too pessimistic for long summarization and chat
+prompts, where even a useful shared scaffold can look small after normalization by
+thousands of prompt tokens.
 
-\begin{proposition}[Waste bound]
-Let $\phi = \Pr[\text{admitted prefix is never reused}]$ be the miss rate of the speculation policy.
-For any admitted prefix $p$, the expected wasted compute is at most
+The current controller therefore supplements density with an \emph{absolute reuse}
+guard:
+
+\begin{definition}[Meaningful absolute reuse]
+Recent reuse is considered materially meaningful if either
 \[
-    \mathbb{E}[\text{waste}(p)] \leq \phi \cdot C(p)
+    T_{\mathrm{reused}} \ge \max(4 L_{\min}^{\mathrm{reuse}}, 64)
+    \qquad \text{or} \qquad
+    H_{\mathrm{recent}} \ge 2,
 \]
-Since the admission rule requires $B(p) \geq \eta \cdot C(p)$ with $\eta > 1$,
-a policy that achieves $\phi < 1/\eta$ has positive expected net value in expectation.
+where $H_{\mathrm{recent}}$ is the number of recent cache hits.
+\end{definition}
+
+This modification prevents the controller from shutting off speculation solely
+because reuse density is diluted by long prompts.
+
+\section{Scaffold-Aware Tuning}
+
+For scaffolded prompt modes such as templated public-dataset prompts (and similarly
+for retrieval-augmented prompts), the benchmark harness now relaxes ShadowKV's
+admission thresholds:
+
+\begin{itemize}
+    \item lower minimum frequency and recent-support requirements,
+    \item lower minimum expected net gain,
+    \item lower benefit-cost ratio,
+    \item longer reuse horizon,
+    \item larger idle-time admission budget,
+    \item longer preferred and maximum speculative prefix lengths.
+\end{itemize}
+
+The goal is not to admit arbitrary long prefixes, but to acknowledge that shared
+scaffolds in structured prompts can be economically worthwhile even when their reuse
+density is small relative to the full request length.
+
+\section{Interpretation of Current Results}
+
+The present codebase reflects two empirical lessons from the recent benchmark work:
+
+\begin{enumerate}
+    \item On short and medium templated workloads, ShadowKV can outperform simpler
+    reactive and greedy baselines when its calibrated benefit model identifies
+    profitable speculative prefixes.
+
+    \item On long summarization and chat-style prompts, a policy that relies too much
+    on normalized reuse density under-admits useful prefixes. The controller and
+    benchmark defaults therefore now include explicit protections for meaningful
+    absolute reuse.
+\end{enumerate}
+
+\begin{proposition}[Why absolute reuse matters]
+Suppose two workloads reuse the same scaffold of length $L_s$, but one has total
+request length $N$ and the other has total request length $10N$. Then the reuse
+density metric differs by a factor of ten, even though the absolute saved prefill
+work is identical. Therefore a density-only shutdown rule can reject economically
+useful reuse on long prompts.
 \end{proposition}
 
 \noindent
-This gives a direct interpretation of the ratio threshold $\eta$:
-it encodes the maximum tolerable speculation miss rate.
-For example, $\eta = 1.35$ asserts that the policy is expected to be profitable
-whenever fewer than $1/1.35 \approx 74\%$ of admitted speculations go unused.
+This is precisely the failure mode addressed by the current implementation update.
 
-\section{Tier Placement}
+\section{Summary}
 
-When both CPU and GPU tiers are available, the system assigns each admitted prefix
-to a tier based on an adjusted benefit that adds a GPU bonus $g > 0$ reflecting
-the lower serving latency of GPU-resident KV states:
-\[
-    B_{\text{gpu}}(p) = B(p) + g
-\]
-The GPU tier incurs a higher precompute cost $C_{\text{gpu}}(p) > C_{\text{cpu}}(p)$
-due to device transfer overhead.
-A prefix is placed in the GPU tier if and only if
-\[
-    V_{\text{gpu}}(p) = B_{\text{gpu}}(p) - C_{\text{gpu}}(p) > V_{\text{cpu}}(p)
-\]
-Otherwise it is placed in the CPU tier.
+The implemented ShadowKV policy is best viewed as a layered decision process:
+\begin{enumerate}
+    \item estimate reuse probability from frequency, recency, streaks, and confidence;
+    \item forecast short-horizon future reuse volume;
+    \item compare expected saved prefill time against discounted speculative cost;
+    \item rank profitable candidates under an idle-time budget;
+    \item modulate speculation with a controller that considers both normalized reuse
+    density and absolute reuse evidence.
+\end{enumerate}
+
+That description matches the present code more closely than the earlier simplified
+frequency-benefit-cost note.
 
 \end{document}

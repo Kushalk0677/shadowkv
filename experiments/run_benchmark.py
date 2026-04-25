@@ -184,14 +184,20 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
             'reuse_discount': 0.95,
             'min_utility_score': 0.02,
             'reuse_horizon_s': 1.35 if prompt_mode == 'rag' else (1.05 if scaffold_mode else 0.75),
+            'bootstrap_horizon_requests': 0.90 if scaffold_mode else 0.45,
             'branching_weight': 0.14 if scaffold_mode else 0.10,
         }
         if scaffold_mode:
-            policy_kwargs['min_frequency'] = 0.12
-            policy_kwargs['min_observations'] = 2
-            policy_kwargs['min_recent_support'] = 0.02
-            policy_kwargs['min_expected_net_ms'] = max(0.5, token_benefit_ms * 4.0)
-            policy_kwargs['max_admissions_per_idle'] = 3
+            policy_kwargs['min_frequency'] = 0.08
+            policy_kwargs['min_observations'] = 1
+            policy_kwargs['min_recent_support'] = 0.01
+            policy_kwargs['min_expected_net_ms'] = max(0.25, token_benefit_ms * 2.5)
+            policy_kwargs['benefit_cost_ratio'] = 0.85
+            policy_kwargs['reuse_horizon_s'] = 1.60 if prompt_mode == 'rag' else 1.40
+            policy_kwargs['bootstrap_horizon_requests'] = 1.25 if prompt_mode == 'rag' else 1.10
+            policy_kwargs['preferred_prefix_len'] = 80
+            policy_kwargs['max_prefix_len'] = 224
+            policy_kwargs['max_admissions_per_idle'] = 4
         return policy_kwargs, calibration
     policy_kwargs = {
         'min_frequency': 0.24,
@@ -216,13 +222,17 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
         'reuse_discount': 0.92,
         'min_utility_score': 0.04,
         'reuse_horizon_s': 1.10 if prompt_mode == 'rag' else (0.90 if scaffold_mode else 0.60),
+        'bootstrap_horizon_requests': 0.80 if scaffold_mode else 0.35,
         'branching_weight': 0.14 if scaffold_mode else 0.10,
     }
     if scaffold_mode:
-        policy_kwargs['min_frequency'] = 0.18
+        policy_kwargs['min_frequency'] = 0.14
         policy_kwargs['min_observations'] = 3
-        policy_kwargs['min_recent_support'] = 0.02
-        policy_kwargs['min_expected_net_ms'] = max(3.0, token_benefit_ms * 5.0)
+        policy_kwargs['min_recent_support'] = 0.01
+        policy_kwargs['min_expected_net_ms'] = max(2.0, token_benefit_ms * 4.0)
+        policy_kwargs['benefit_cost_ratio'] = 1.15
+        policy_kwargs['reuse_horizon_s'] = 1.25 if prompt_mode == 'rag' else 1.05
+        policy_kwargs['bootstrap_horizon_requests'] = 0.95 if prompt_mode == 'rag' else 0.85
     return policy_kwargs, calibration
 
 

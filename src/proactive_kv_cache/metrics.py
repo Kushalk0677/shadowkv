@@ -46,6 +46,8 @@ class RunSummary:
     auto_disabled_reason: str | None = None
     speculative_overlap_ms: float = 0.0
     speculative_overlap_events: int = 0
+    bootstrap_store_deferrals: int = 0
+    speculative_useful_savings_ms: float = 0.0
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -104,6 +106,8 @@ def summarize_run(
     merged['reuse_success_rate'] = float(merged['reuse_successes'] / max(merged['reuse_successes'] + merged['reuse_failures'], 1))
     merged['speculative_overlap_ms'] = float(merged.get('speculative_overlap_ms', 0.0))
     merged['speculative_overlap_events'] = int(merged.get('speculative_overlap_events', 0))
+    merged['bootstrap_store_deferrals'] = int(merged.get('bootstrap_store_deferrals', 0))
+    merged['speculative_useful_savings_ms'] = float(merged.get('speculative_useful_savings_ms', bank_metrics.get('useful_speculative_savings_ms', 0.0)))
 
     return RunSummary(
         mean_latency_ms=mean_latency,
@@ -144,4 +148,6 @@ def summarize_run(
         auto_disabled_reason=merged['auto_disabled_reason'],
         speculative_overlap_ms=merged['speculative_overlap_ms'],
         speculative_overlap_events=merged['speculative_overlap_events'],
+        bootstrap_store_deferrals=merged['bootstrap_store_deferrals'],
+        speculative_useful_savings_ms=merged['speculative_useful_savings_ms'],
     )

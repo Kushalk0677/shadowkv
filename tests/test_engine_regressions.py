@@ -1,5 +1,10 @@
-from proactive_kv_cache.engines import ReactivePrefixCacheEngine, ShadowKVEngine
+import time
+import threading
+
+from proactive_kv_cache.cache import TieredStateBank
+from proactive_kv_cache.engines import FrequencySpeculativeEngine, ReactivePrefixCacheEngine, ShadowKVEngine
 from proactive_kv_cache.models import FakeBackend, PrefillResult
+from proactive_kv_cache.policy import CostAwareSlackPolicy, FrequencyPolicy
 
 
 class FailingCacheBackend(FakeBackend):
@@ -38,6 +43,20 @@ class InternalFallbackBackend(FakeBackend):
                 cache_fallback_reason='backend_retry_without_cache:RuntimeError',
                 prepared_past_length=0,
             )
+        return super().prefill(tokens, past_key_values=past_key_values)
+
+
+class SlowSpeculationBackend(FakeBackend):
+    def __init__(self, device: str = 'cpu'):
+        super().__init__(device=device)
+        self.call_count = 0
+        self.speculation_started = threading.Event()
+
+    def prefill(self, tokens, past_key_values=None):
+        self.call_count += 1
+        if self.call_count == 2 and past_key_values is None:
+            self.speculation_started.set()
+            time.sleep(0.05)
         return super().prefill(tokens, past_key_values=past_key_values)
 
 
@@ -190,3 +209,169 @@ def test_shadowkv_cpu_controller_opens_up_when_recent_reuse_is_strong():
 
     assert allowed is True
     assert engine.engine_metrics['effective_speculative_k_final'] == 2
+
+
+def test_shadowkv_controller_keeps_speculation_alive_when_absolute_reuse_is_meaningful_but_density_is_low():
+    backend = FakeBackend(device='cpu')
+    engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=1.0)
+    engine.stop_event.set()
+    if engine.thread is not None:
+        engine.thread.join(timeout=1.0)
+
+    engine.engine_metrics['requests_seen'] = 20
+    engine._recent_request_window.extend(
+        [
+            (1200, 94, True),
+            (1100, 0, False),
+            (1150, 0, False),
+            (1180, 0, False),
+            (1120, 0, False),
+            (1210, 0, False),
+            (1170, 0, False),
+            (1110, 0, False),
+            (1190, 0, False),
+            (1160, 0, False),
+            (1130, 0, False),
+            (1140, 0, False),
+        ]
+    )
+    engine._recent_speculative_net_values.append(8.0)
+
+    allowed = engine._refresh_speculation_controller()
+
+    assert allowed is True
+    assert engine.engine_metrics['effective_speculative_k_final'] >= 1
+
+
+def test_shadowkv_bootstrap_defers_reactive_store_and_allows_speculative_hit():
+    backend = FakeBackend(device='cpu')
+    policy = CostAwareSlackPolicy(
+        min_frequency=0.0,
+        benefit_cost_ratio=0.0,
+        fixed_prefill_overhead_ms=0.1,
+        memory_penalty_per_mb=0.0,
+        max_admissions_per_idle=1,
+        min_prefix_len=3,
+        max_prefix_len=24,
+        min_observations=1,
+        min_expected_net_ms=0.0,
+        min_recent_support=0.0,
+        min_utility_score=0.0,
+    )
+    engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=1, idle_threshold_ms=1.0, policy=policy)
+    tokens = (1, 2, 3, 4, 5, 6)
+    metadata = {'prompt_mode': 'templated', 'shared_prefix_text': 'shared prompt', 'shared_prefix_hint_tokens': 4}
+
+    first = engine.serve_tokens(1, tokens, metadata=metadata)
+    assert first.was_cache_hit is False
+    assert engine.engine_metrics['store_successes'] == 0
+    assert engine.engine_metrics['bootstrap_store_deferrals'] >= 1
+
+    time.sleep(0.05)
+
+    second = engine.serve_tokens(2, tokens, metadata=metadata)
+    engine.shutdown()
+
+    assert second.was_cache_hit is True
+    assert second.was_speculative_hit is True
+    assert len(engine.speculative_log) >= 1
+    assert engine.engine_metrics['speculative_useful_savings_ms'] > 0.0
+
+
+def test_cost_aware_policy_uses_bootstrap_horizon_without_arrival_history():
+    bank = TieredStateBank(max_memory_bytes=32 * 1024 * 1024)
+    tokens = (1, 2, 3, 4, 5, 6)
+    bank.observe_query(tokens, tracked_prefix_lengths=[4], reusable_prefix_limit=4, observed_at=1.0)
+
+    policy = CostAwareSlackPolicy(
+        min_frequency=0.0,
+        ms_per_token=0.4,
+        fixed_prefill_overhead_ms=0.1,
+        memory_penalty_per_mb=0.0,
+        kv_mb_per_token=0.001,
+        idle_cost_fraction=0.1,
+        benefit_cost_ratio=0.0,
+        max_admissions_per_idle=1,
+        min_prefix_len=4,
+        max_prefix_len=8,
+        min_observations=1,
+        min_expected_net_ms=0.0,
+        min_recent_support=0.0,
+        min_utility_score=0.0,
+        bootstrap_horizon_requests=1.0,
+    )
+
+    decisions = policy.rank(bank, budget_k=1, prefer_gpu=False)
+
+    assert len(decisions) == 1
+    assert decisions[0].expected_benefit_ms > decisions[0].expected_cost_ms
+
+
+def test_frequency_speculative_bootstrap_defers_reactive_store_and_records_speculation():
+    backend = FakeBackend(device='cpu')
+    engine = FrequencySpeculativeEngine(backend=backend, speculative_k=1, idle_threshold_ms=1.0)
+    engine.policy = FrequencyPolicy(min_frequency=0.0, min_prefix_len=3, max_prefix_len=24, min_observations=1)
+    engine._bootstrap_speculation_observations = 1
+    tokens = (1, 2, 3, 4, 5, 6)
+    metadata = {'prompt_mode': 'templated', 'shared_prefix_text': 'shared prompt', 'shared_prefix_hint_tokens': 4}
+
+    first = engine.serve_tokens(1, tokens, metadata=metadata)
+    assert first.was_cache_hit is False
+    assert engine.engine_metrics['bootstrap_store_deferrals'] >= 1
+
+    time.sleep(0.05)
+
+    second = engine.serve_tokens(2, tokens, metadata=metadata)
+    engine.shutdown()
+
+    assert second.was_cache_hit is True
+    assert second.was_speculative_hit is True
+    assert len(engine.speculative_log) >= 1
+
+
+def test_frequency_speculative_records_overlap_when_request_arrives_during_speculation():
+    backend = SlowSpeculationBackend(device='cpu')
+    engine = FrequencySpeculativeEngine(backend=backend, speculative_k=1, idle_threshold_ms=1.0)
+    engine.policy = FrequencyPolicy(min_frequency=0.0, min_prefix_len=3, max_prefix_len=24, min_observations=1)
+    engine._bootstrap_speculation_observations = 1
+    tokens = (1, 2, 3, 4, 5, 6)
+    metadata = {'prompt_mode': 'templated', 'shared_prefix_text': 'shared prompt', 'shared_prefix_hint_tokens': 4}
+
+    engine.serve_tokens(1, tokens, metadata=metadata)
+    assert backend.speculation_started.wait(timeout=1.0)
+    engine.serve_tokens(2, tokens, metadata=metadata)
+    engine.shutdown()
+
+    assert engine.engine_metrics['speculative_overlap_events'] >= 1
+    assert engine.engine_metrics['speculative_overlap_ms'] > 0.0
+
+
+def test_shadowkv_promotes_hot_speculative_entry_to_gpu():
+    backend = FakeBackend(device='cuda:0')
+    policy = CostAwareSlackPolicy(
+        min_frequency=0.0,
+        benefit_cost_ratio=0.0,
+        fixed_prefill_overhead_ms=0.1,
+        memory_penalty_per_mb=0.0,
+        max_admissions_per_idle=1,
+        min_prefix_len=3,
+        max_prefix_len=32,
+        min_observations=1,
+        min_expected_net_ms=0.0,
+        min_recent_support=0.0,
+        min_utility_score=0.0,
+        bootstrap_horizon_requests=1.0,
+    )
+    engine = ShadowKVEngine(backend=backend, enable_gpu_tier=True, speculative_k=1, idle_threshold_ms=1.0, policy=policy)
+    tokens = tuple(range(1, 17))
+    metadata = {'prompt_mode': 'templated', 'shared_prefix_text': 'shared prompt', 'shared_prefix_hint_tokens': 12}
+
+    first = engine.serve_tokens(1, tokens, metadata=metadata)
+    assert first.was_cache_hit is False
+    time.sleep(0.05)
+    second = engine.serve_tokens(2, tokens, metadata=metadata)
+    engine.shutdown()
+
+    assert second.was_cache_hit is True
+    assert second.cache_tier == 'gpu'
+    assert engine.bank.snapshot_metrics()['promotions'] >= 1

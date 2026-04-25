@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
@@ -16,6 +17,66 @@ class PrefillResult:
     cache_prepare_latency_ms: float = 0.0
     cache_fallback_reason: str | None = None
     prepared_past_length: int = 0
+
+
+class LegacyTupleCacheAdapter:
+    def __init__(self, legacy_cache: Any) -> None:
+        self.legacy_cache = legacy_cache
+
+    def get_seq_length(self) -> int:
+        try:
+            first_layer = self.legacy_cache[0]
+            first_tensor = first_layer[0]
+            return int(first_tensor.shape[-2])
+        except Exception:
+            return 0
+
+    def get_mask_sizes(self, query_length, layer_idx: int = 0):
+        if hasattr(query_length, 'item'):
+            query_length = query_length.item()
+        kv_offset = 0
+        kv_length = self.get_seq_length() + int(query_length)
+        return kv_length, kv_offset
+
+    def get_max_cache_shape(self, layer_idx: int = 0):
+        return -1
+
+    def update(self, key_states: Any, value_states: Any, layer_idx: int, *args, **kwargs):
+        layers = list(self.legacy_cache)
+        while len(layers) <= layer_idx:
+            layers.append((None, None))
+        prior_layer = layers[layer_idx]
+        prior_key = prior_layer[0]
+        prior_value = prior_layer[1]
+        extras = tuple(prior_layer[2:]) if len(prior_layer) > 2 else ()
+        if prior_key is None or prior_value is None:
+            next_key = key_states
+            next_value = value_states
+        else:
+            next_key = self._concat_cache_tensors(prior_key, key_states)
+            next_value = self._concat_cache_tensors(prior_value, value_states)
+        layers[layer_idx] = (next_key, next_value, *extras)
+        self.legacy_cache = tuple(layers)
+        return next_key, next_value
+
+    def _concat_cache_tensors(self, left: Any, right: Any) -> Any:
+        try:
+            import torch
+            return torch.cat([left, right], dim=-2)
+        except Exception:
+            return right
+
+    def __iter__(self):
+        return iter(self.legacy_cache)
+
+    def __getitem__(self, idx):
+        return self.legacy_cache[idx]
+
+    def __len__(self) -> int:
+        return len(self.legacy_cache)
+
+    def to_legacy_cache(self) -> Any:
+        return self.legacy_cache
 
 
 class Backend:
@@ -175,16 +236,80 @@ class HuggingFaceBackend(Backend):
 
     def prepare_past_key_values(self, past_key_values: Any) -> Any:
         moved = self.move_kv_cache(past_key_values, self.device)
-        return self._trim_past_key_values(moved, self.max_positions)
+        trimmed = self._trim_past_key_values(moved, self.max_positions)
+        return self._normalize_past_key_values(trimmed)
+
+    def _as_legacy_cache_tuple(self, past_key_values: Any) -> Any:
+        if past_key_values is None:
+            return None
+        to_legacy_cache = getattr(past_key_values, 'to_legacy_cache', None)
+        if callable(to_legacy_cache):
+            try:
+                return to_legacy_cache()
+            except Exception:
+                pass
+        if isinstance(past_key_values, LegacyTupleCacheAdapter):
+            return past_key_values.to_legacy_cache()
+        if isinstance(past_key_values, tuple):
+            return past_key_values
+        try:
+            layers = []
+            for layer in past_key_values:
+                if not isinstance(layer, (tuple, list)):
+                    return None
+                layers.append(tuple(layer))
+            return tuple(layers)
+        except Exception:
+            return None
+
+    def _legacy_tuple_to_cache(self, past_key_values: Any) -> Any:
+        try:
+            from transformers.cache_utils import DynamicCache
+        except Exception:
+            return LegacyTupleCacheAdapter(past_key_values)
+        from_legacy_cache = getattr(DynamicCache, 'from_legacy_cache', None)
+        if callable(from_legacy_cache):
+            return from_legacy_cache(past_key_values)
+        try:
+            cache = DynamicCache()
+            for layer_idx, layer in enumerate(past_key_values):
+                if len(layer) < 2:
+                    return LegacyTupleCacheAdapter(past_key_values)
+                key_states, value_states = layer[0], layer[1]
+                cache.update(key_states, value_states, layer_idx)
+            return cache
+        except Exception:
+            return LegacyTupleCacheAdapter(past_key_values)
+
+    def _normalize_past_key_values(self, past_key_values: Any) -> Any:
+        if past_key_values is None:
+            return None
+        if hasattr(past_key_values, "get_seq_length") and hasattr(past_key_values, 'update'):
+            return past_key_values
+        legacy_tuple = self._as_legacy_cache_tuple(past_key_values)
+        if legacy_tuple is not None:
+            return self._legacy_tuple_to_cache(legacy_tuple)
+        return past_key_values
 
     def move_kv_cache(self, past_key_values: Any, target: str) -> Any:
         if past_key_values is None:
             return None
+        legacy_tuple = self._as_legacy_cache_tuple(past_key_values)
+        if legacy_tuple is None:
+            return past_key_values
         moved_layers = []
         try:
-            for layer in past_key_values:
-                moved_layers.append(tuple(t.to(target) for t in layer))
-            return tuple(moved_layers)
+            for layer in legacy_tuple:
+                moved_layer = []
+                for t in layer:
+                    if t is None:
+                        moved_layer.append(None)
+                    elif hasattr(t, 'to'):
+                        moved_layer.append(t.to(target))
+                    else:
+                        moved_layer.append(t)
+                moved_layers.append(tuple(moved_layer))
+            return self._normalize_past_key_values(tuple(moved_layers))
         except Exception as exc:
             raise RuntimeError(f'Failed to move past_key_values to {target!r} for model {self.model_name!r}') from exc
 
@@ -194,6 +319,11 @@ class HuggingFaceBackend(Backend):
     def _past_length(self, past_key_values: Any) -> int:
         if past_key_values is None:
             return 0
+        if hasattr(past_key_values, 'get_seq_length'):
+            try:
+                return int(past_key_values.get_seq_length())
+            except Exception:
+                return 0
         try:
             first_layer = past_key_values[0]
             first_tensor = first_layer[0]
@@ -206,18 +336,28 @@ class HuggingFaceBackend(Backend):
             return None
         if keep_last_tokens <= 0:
             return None
+        legacy_tuple = self._as_legacy_cache_tuple(past_key_values)
+        if legacy_tuple is None:
+            crop = getattr(past_key_values, 'crop', None)
+            if callable(crop):
+                try:
+                    crop(keep_last_tokens)
+                    return past_key_values
+                except Exception:
+                    return past_key_values
+            return past_key_values
         try:
             trimmed_layers = []
-            for layer in past_key_values:
+            for layer in legacy_tuple:
                 trimmed_layer = []
                 for tensor in layer:
-                    if tensor.shape[-2] > keep_last_tokens:
+                    if tensor is not None and hasattr(tensor, 'shape') and tensor.shape[-2] > keep_last_tokens:
                         trimmed_tensor = tensor[..., -keep_last_tokens:, :]
                     else:
                         trimmed_tensor = tensor
                     trimmed_layer.append(trimmed_tensor)
                 trimmed_layers.append(tuple(trimmed_layer))
-            return tuple(trimmed_layers)
+            return self._normalize_past_key_values(tuple(trimmed_layers))
         except Exception:
             return past_key_values
 
@@ -308,9 +448,10 @@ class HuggingFaceBackend(Backend):
         util = None
         if util_before is not None and util_after is not None:
             util = float((util_before + util_after) / 2.0)
-        memory_bytes = estimate_past_key_values_bytes(output.past_key_values)
+        normalized_output_kv = self._normalize_past_key_values(output.past_key_values)
+        memory_bytes = estimate_past_key_values_bytes(normalized_output_kv)
         return PrefillResult(
-            kv_cache=output.past_key_values,
+            kv_cache=normalized_output_kv,
             latency_ms=latency_ms,
             memory_bytes=memory_bytes,
             device=self.device,
@@ -340,6 +481,7 @@ class VLLMBackend(Backend):
         trust_remote_code: bool = False,
     ) -> None:
         try:
+            os.environ.setdefault('VLLM_WORKER_MULTIPROC_METHOD', 'spawn')
             from transformers import AutoTokenizer
             from vllm import LLM, SamplingParams
         except Exception as exc:
@@ -357,6 +499,11 @@ class VLLMBackend(Backend):
             'tensor_parallel_size': tensor_parallel_size,
             'enable_prefix_caching': enable_prefix_caching,
             'trust_remote_code': trust_remote_code,
+            # Prefer eager mode for research-benchmark stability on T4/Colab;
+            # it avoids large CUDA graph warmup allocations that can swamp
+            # small models in mixed-backend experiments.
+            'enforce_eager': True,
+            'disable_log_stats': True,
         }
         if dtype != 'auto':
             llm_kwargs['dtype'] = dtype
@@ -381,10 +528,9 @@ class VLLMBackend(Backend):
     def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
         if past_key_values is not None:
             raise RuntimeError('vLLM backend does not expose external past_key_values for custom KV reuse. Use native_prefix_cache baseline instead.')
-        prompt_token_ids = [list(tokens)]
         util_before = _read_gpu_utilization(self._nvml)
         start = time.perf_counter()
-        outputs = self.llm.generate(prompt_token_ids=prompt_token_ids, sampling_params=self.sampling_params, use_tqdm=False)
+        outputs = self._generate_with_llm(tokens)
         latency_ms = (time.perf_counter() - start) * 1000.0
         util_after = _read_gpu_utilization(self._nvml)
         util = None
@@ -403,13 +549,181 @@ class VLLMBackend(Backend):
             used_past_key_values=False,
         )
 
+    def _generate_with_llm(self, tokens: Sequence[int]):
+        prompt_token_ids = [list(tokens)]
+        generate_attempts = [
+            lambda: self.llm.generate(
+                prompts={'prompt_token_ids': list(tokens)},
+                sampling_params=self.sampling_params,
+                use_tqdm=False,
+            ),
+            lambda: self.llm.generate(
+                prompts=[{'prompt_token_ids': list(tokens)}],
+                sampling_params=self.sampling_params,
+                use_tqdm=False,
+            ),
+            lambda: self.llm.generate(
+                prompts=[self.decode(tokens)],
+                sampling_params=self.sampling_params,
+                use_tqdm=False,
+            ),
+            lambda: self.llm.generate(
+                inputs={'prompt_token_ids': prompt_token_ids},
+                sampling_params=self.sampling_params,
+                use_tqdm=False,
+            ),
+            lambda: self.llm.generate(
+                inputs=[{'prompt_token_ids': list(tokens)}],
+                sampling_params=self.sampling_params,
+                use_tqdm=False,
+            ),
+        ]
+        errors: List[str] = []
+        for attempt in generate_attempts:
+            try:
+                return attempt()
+            except TypeError as exc:
+                errors.append(str(exc))
+                continue
+        raise RuntimeError(
+            'vLLM generate API did not accept the tested prompt/input forms for this installed version. '
+            f'Observed errors: {" | ".join(errors)}'
+        )
+
+
+class SGLangBackend(Backend):
+    backend_name = 'sglang'
+    default_min_reuse_prefix_tokens = 48
+    default_min_store_prefix_tokens = 32
+    default_cache_reuse_overhead_ms = 0.0
+    supports_external_kv = False
+    supports_native_prefix_caching = True
+
+    def __init__(
+        self,
+        model_name: str,
+        device: str = 'cuda:0',
+        dtype: str = 'auto',
+        tensor_parallel_size: int = 1,
+        trust_remote_code: bool = False,
+    ) -> None:
+        try:
+            import sglang as sgl
+            from transformers import AutoTokenizer
+        except Exception as exc:
+            raise RuntimeError('SGLang backend requires `pip install sglang` and a compatible CUDA environment.') from exc
+
+        self.model_name = model_name
+        self.device = device
+        self.dtype = dtype
+        self.tensor_parallel_size = tensor_parallel_size
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.max_positions = int(getattr(self.tokenizer, 'model_max_length', 4096) or 4096)
+        self._nvml = _try_init_nvml(device)
+        engine_kwargs = {
+            'model_path': model_name,
+            'tp_size': tensor_parallel_size,
+            'trust_remote_code': trust_remote_code,
+        }
+        if dtype != 'auto':
+            engine_kwargs['dtype'] = dtype
+        try:
+            # Match the documented offline-engine path: sgl.Engine(model_path=...)
+            self.engine = sgl.Engine(**engine_kwargs)
+        except Exception as exc:
+            raise RuntimeError(
+                f'Failed to initialize SGLang Engine for model {model_name!r} '
+                f'with kwargs {sorted(engine_kwargs.keys())}.'
+            ) from exc
+
+    def tokenize(self, text: str) -> Tuple[int, ...]:
+        encoded = self.tokenizer(text, truncation=True, max_length=self.max_positions)['input_ids']
+        return tuple(encoded)
+
+    def decode(self, tokens: Sequence[int]) -> str:
+        return self.tokenizer.decode(list(tokens))
+
+    def estimate_prefill_cost_ms(self, token_count: int) -> float:
+        return float(0.30 * max(token_count, 0) + 4.0)
+
+    def estimate_kv_cache_bytes(self, token_count: int) -> int:
+        return int(max(token_count, 0) * 256)
+
+    def _generate_with_engine(self, token_ids: Sequence[int]) -> Any:
+        try:
+            # The documented offline API accepts input_ids and SGLang-native sampling params.
+            return self.engine.generate(
+                input_ids=[list(token_ids)],
+                sampling_params={'max_new_tokens': 1, 'temperature': 0.0},
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                'SGLang offline generation failed while calling Engine.generate(input_ids=..., sampling_params=...).'
+            ) from exc
+
+    def _infer_generated_token_count(self, outputs: Any) -> int:
+        try:
+            if isinstance(outputs, list) and outputs:
+                first = outputs[0]
+                if isinstance(first, dict):
+                    if 'output_ids' in first and first['output_ids'] is not None:
+                        return len(first['output_ids'])
+                generated = getattr(first, 'token_ids', None)
+                if generated is not None:
+                    return len(generated)
+                nested = getattr(first, 'outputs', None)
+                if nested:
+                    token_ids = getattr(nested[0], 'token_ids', None)
+                    if token_ids is not None:
+                        return len(token_ids)
+        except Exception:
+            pass
+        return 1
+
+    def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
+        if past_key_values is not None:
+            raise RuntimeError('SGLang backend does not expose external past_key_values for custom KV reuse. Use the native prefix cache baseline instead.')
+        prompt_tokens = list(tokens)
+        util_before = _read_gpu_utilization(self._nvml)
+        start = time.perf_counter()
+        outputs = self._generate_with_engine(prompt_tokens)
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        util_after = _read_gpu_utilization(self._nvml)
+        util = None
+        if util_before is not None and util_after is not None:
+            util = float((util_before + util_after) / 2.0)
+        generated_tokens = self._infer_generated_token_count(outputs)
+        token_count = len(prompt_tokens) + max(generated_tokens, 1)
+        memory_bytes = int(max(token_count, 1) * 256)
+        meta = {'native_prefix_caching': True, 'token_count': token_count}
+        return PrefillResult(
+            kv_cache=meta,
+            latency_ms=latency_ms,
+            memory_bytes=memory_bytes,
+            device=self.device,
+            gpu_utilization_pct=util,
+            used_past_key_values=False,
+        )
+
+    def shutdown(self) -> None:
+        try:
+            self.engine.shutdown()
+        except Exception:
+            return
+
 
 def estimate_past_key_values_bytes(past_key_values: Any) -> int:
     total = 0
     try:
+        to_legacy_cache = getattr(past_key_values, 'to_legacy_cache', None)
+        if callable(to_legacy_cache):
+            past_key_values = to_legacy_cache()
         for layer in past_key_values:
             for tensor in layer:
-                total += tensor.numel() * tensor.element_size()
+                if tensor is not None:
+                    total += tensor.numel() * tensor.element_size()
     except Exception:
         total = 0
     return int(total)
@@ -472,6 +786,16 @@ def load_backend(
             dtype=dtype,
             tensor_parallel_size=tensor_parallel_size,
             enable_prefix_caching=enable_prefix_caching,
+            trust_remote_code=trust_remote_code,
+        )
+    if backend == 'sglang':
+        if not model_name:
+            raise ValueError('model_name is required for sglang backend')
+        return SGLangBackend(
+            model_name=model_name,
+            device=device,
+            dtype=dtype,
+            tensor_parallel_size=tensor_parallel_size,
             trust_remote_code=trust_remote_code,
         )
     raise ValueError(f'Unknown backend: {backend}')

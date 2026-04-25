@@ -45,3 +45,19 @@ def test_reactive_engine_auto_disables_after_repeated_unusable_matches():
     assert engine.cache_enabled is False
     assert engine.engine_metrics['cache_active_final'] is False
     assert engine.engine_metrics['auto_disabled_reason'] in {'no_usable_reuse', 'net_negative_reuse', 'low_reuse_density', 'no_prefix_reuse_early'}
+
+
+def test_reactive_engine_keeps_cache_enabled_when_absolute_reuse_is_meaningful_even_if_density_is_low():
+    backend = ConservativeNoReuseBackend()
+    engine = ReactivePrefixCacheEngine(backend=backend)
+    engine.engine_metrics['requests_seen'] = 16
+    engine.engine_metrics['reuse_attempts'] = 16
+    engine.engine_metrics['reuse_successes'] = 1
+    engine.engine_metrics['bypassed_matches'] = 15
+    engine.engine_metrics['recompute_tokens_total'] = 6400
+    engine.engine_metrics['reused_prefix_tokens_total'] = 96
+
+    engine._maybe_auto_disable()
+
+    assert engine.cache_enabled is True
+    assert engine.engine_metrics['auto_disabled_reason'] is None

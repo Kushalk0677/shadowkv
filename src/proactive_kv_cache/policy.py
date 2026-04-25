@@ -86,6 +86,7 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         max_reuse_probability: float = 0.98,
         min_utility_score: float = 0.0,
         reuse_horizon_s: float = 0.75,
+        bootstrap_horizon_requests: float = 0.75,
         branching_weight: float = 0.12,
         dominance_tolerance: float = 0.90,
     ):
@@ -112,6 +113,7 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         self.max_reuse_probability = max_reuse_probability
         self.min_utility_score = min_utility_score
         self.reuse_horizon_s = reuse_horizon_s
+        self.bootstrap_horizon_requests = bootstrap_horizon_requests
         self.branching_weight = branching_weight
         self.dominance_tolerance = dominance_tolerance
 
@@ -148,7 +150,15 @@ class CostAwareSlackPolicy(SpeculationPolicy):
     ) -> float:
         horizon_requests = max(arrival_rate_rps * self.reuse_horizon_s, 0.0)
         if horizon_requests <= 0.0:
-            return max(reuse_probability * 0.25, 0.0)
+            bootstrap_strength = (
+                0.55 * min(recent_support, 1.0)
+                + 0.25 * min(recent_streak / max(self.min_observations + 1, 1), 1.0)
+                + 0.20 * min(reuse_probability, 1.0)
+            )
+            horizon_requests = max(
+                self.bootstrap_horizon_requests * (0.75 + bootstrap_strength),
+                reuse_probability,
+            )
         streak_multiplier = 1.0 + 0.20 * min(recent_streak, 4)
         support_multiplier = 1.0 + 0.75 * min(recent_support, 1.0)
         branching_multiplier = 1.0 + self.branching_weight * min(max(branching_factor - 1, 0), 4)
