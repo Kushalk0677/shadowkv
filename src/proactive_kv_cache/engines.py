@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 
 from .cache import CacheEntry, TieredStateBank
 from .metrics import summarize_run
-from .models import Backend
+from .models import Backend, estimate_past_key_values_bytes
 from .policy import CostAwareSlackPolicy, FrequencyPolicy, SpeculationPolicy
 
 
@@ -62,6 +62,8 @@ class BaseEngine:
             'saved_latency_estimate_ms': 0.0,
             'store_latency_total_ms': 0.0,
             'full_prefill_latency_total_ms': 0.0,
+            'speculative_overlap_ms': 0.0,
+            'speculative_overlap_events': 0,
             'cache_disable_check_every': 8,
             'cache_disable_min_attempts': 8,
             'cache_disable_min_requests': 10,
@@ -264,11 +266,24 @@ class BaseEngine:
             return self.ewma_full_ms_per_token * token_count
         return self.backend.estimate_prefill_cost_ms(token_count)
 
+    def _materialize_cache_for_tier(self, kv_cache, prefix_len: int, tier: str) -> tuple[object, float, int]:
+        device_target = self._device_target_for_tier(tier)
+        cache_obj = kv_cache
+        move_latency_ms = 0.0
+        if device_target != self.backend.device:
+            move_start = time.perf_counter()
+            cache_obj = self.backend.move_kv_cache(kv_cache, device_target)
+            move_latency_ms = (time.perf_counter() - move_start) * 1000.0
+        memory_bytes = estimate_past_key_values_bytes(cache_obj)
+        if memory_bytes <= 0:
+            memory_bytes = self.backend.estimate_kv_cache_bytes(prefix_len)
+        return cache_obj, move_latency_ms, memory_bytes
+
     def _estimate_saved_ms(self, total_tokens: int, match_len: int, suffix_len: int) -> float:
         matched_cost = self._estimate_full_cost_ms(match_len)
         suffix_cost = self._estimate_full_cost_ms(suffix_len)
         gross_saved = max(matched_cost, 0.0)
-        penalty = self.ewma_cache_reuse_overhead_ms + 0.05 * max(suffix_len - match_len, 0)
+        penalty = self.ewma_cache_reuse_overhead_ms + 0.03 * max(suffix_len, 0)
         if total_tokens > 0 and match_len / total_tokens < self.tuning.min_prefix_coverage_ratio:
             penalty += 4.0
         return gross_saved - penalty - 0.10 * suffix_cost
@@ -334,13 +349,13 @@ class BaseEngine:
         prefix = tokens[:prefix_len]
         prefill = self.backend.prefill(prefix)
         self._update_full_cost_stats(prefix_len, prefill.latency_ms)
-        device_target = self._device_target_for_tier(tier)
-        cache_obj = prefill.kv_cache if device_target == self.backend.device else self.backend.move_kv_cache(prefill.kv_cache, device_target)
-        stored = self.bank.store(prefix, cache_obj, prefill.latency_ms, prefill.memory_bytes, is_speculative=False, tier=tier)
+        cache_obj, move_latency_ms, memory_bytes = self._materialize_cache_for_tier(prefill.kv_cache, prefix_len, tier)
+        total_latency_ms = float(prefill.latency_ms + move_latency_ms)
+        stored = self.bank.store(prefix, cache_obj, total_latency_ms, memory_bytes, is_speculative=False, tier=tier)
         if stored:
             self.engine_metrics['store_successes'] += 1
-            self.engine_metrics['store_latency_total_ms'] = float(self.engine_metrics.get('store_latency_total_ms', 0.0)) + float(prefill.latency_ms)
-            return float(prefill.latency_ms)
+            self.engine_metrics['store_latency_total_ms'] = float(self.engine_metrics.get('store_latency_total_ms', 0.0)) + total_latency_ms
+            return total_latency_ms
         self.engine_metrics['store_skips'] += 1
         return 0.0
 
@@ -382,35 +397,28 @@ class BaseEngine:
         self.engine_metrics['full_prefill_latency_total_ms'] = float(self.engine_metrics.get('full_prefill_latency_total_ms', 0.0)) + float(out.latency_ms)
         return out
 
-    def _empty_prefill_result(self, kv_cache):
-        class _EmptyPrefillResult:
-            def __init__(self, past_key_values):
-                self.kv_cache = past_key_values
-                self.latency_ms = 0.0
-                self.memory_bytes = 0
-                self.device = None
-                self.gpu_utilization_pct = None
-
-        return _EmptyPrefillResult(kv_cache)
-
     def _prefill_with_cache_fallback(self, tokens: Tuple[int, ...], entry: CacheEntry, match_len: int):
         suffix = tokens[match_len:]
-        kv_cache = self.backend.prepare_past_key_values(entry.kv_cache)
-        if len(suffix) == 0:
-            self.engine_metrics['reuse_successes'] += 1
-            self._update_reuse_cost_stats(0, 0.0, match_len)
-            return self._empty_prefill_result(kv_cache), 0, True
         try:
-            out = self.backend.prefill(suffix, past_key_values=kv_cache)
-            self.engine_metrics['reuse_successes'] += 1
-            self._update_reuse_cost_stats(len(suffix), out.latency_ms, match_len)
-            return out, len(suffix), True
-        except Exception:
+            out = self.backend.prefill(suffix, past_key_values=entry.kv_cache)
+        except (RuntimeError, ValueError, IndexError):
             self.bank.remove(entry.prefix_tokens)
             self.engine_metrics['reuse_failures'] += 1
             self.bank.add_metric('reuse_failures', 1)
             out = self._prefill_full(tokens)
-            return out, len(tokens), False
+            return out, len(tokens), False, 0
+        if entry.kv_cache is not None and not out.used_past_key_values:
+            self.bank.remove(entry.prefix_tokens)
+            self.engine_metrics['reuse_failures'] += 1
+            self.bank.add_metric('reuse_failures', 1)
+            self.bank.add_metric('reuse_backend_fallbacks', 1)
+            out = self._prefill_full(tokens)
+            return out, len(tokens), False, 0
+        actual_match_len = min(match_len, max(int(out.prepared_past_length), 0))
+        self.engine_metrics['reuse_successes'] += 1
+        recomputed_tokens = max(len(tokens) - actual_match_len, 0)
+        self._update_reuse_cost_stats(recomputed_tokens, out.latency_ms, actual_match_len)
+        return out, recomputed_tokens, True, actual_match_len
 
 
 class NoCacheEngine(BaseEngine):
@@ -561,12 +569,12 @@ class ReactivePrefixCacheEngine(BaseEngine):
                 )
             )
 
-        out, recomputed_tokens, cache_hit = self._prefill_with_cache_fallback(tokens, admitted_entry, match_len)
+        out, recomputed_tokens, cache_hit, actual_match_len = self._prefill_with_cache_fallback(tokens, admitted_entry, match_len)
         return self._record(
             RequestResult(
                 request_id=request_id,
                 latency_ms=out.latency_ms,
-                matched_prefix_length=match_len if cache_hit else 0,
+                matched_prefix_length=actual_match_len if cache_hit else 0,
                 tokens_recomputed=recomputed_tokens,
                 was_cache_hit=cache_hit,
                 was_speculative_hit=admitted_entry.was_speculative if cache_hit else False,
@@ -643,6 +651,11 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
         self.stop_event = threading.Event()
         self._background_exception: Exception | None = None
         self.speculative_log: List[Dict] = []
+        self.thread: threading.Thread | None = None
+
+    def _ensure_worker_started(self) -> None:
+        if self.thread is not None or not getattr(self.backend, 'supports_external_kv', True):
+            return
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
@@ -652,6 +665,7 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
 
     def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
         self._check_background_exception()
+        self._ensure_worker_started()
         self.serving_event.set()
         self.last_request_time = time.time()
         try:
@@ -673,6 +687,8 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
         try:
             while not self.stop_event.is_set():
                 time.sleep(0.005)
+                if not self.cache_enabled:
+                    continue
                 idle_ms = (time.time() - self.last_request_time) * 1000.0
                 if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
                     continue
@@ -684,23 +700,29 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
                     if self.bank.contains(decision.prefix_tokens) or not self._speculation_allowed(decision.prefix_tokens):
                         continue
 
+                    start = time.perf_counter()
                     out = self.backend.prefill(decision.prefix_tokens)
                     self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
+                    cache_obj, move_latency_ms, memory_bytes = self._materialize_cache_for_tier(out.kv_cache, len(decision.prefix_tokens), 'cpu')
+                    total_latency_ms = float(out.latency_ms + move_latency_ms)
                     stored = self.bank.store(
                         decision.prefix_tokens,
-                        self.backend.move_kv_cache(out.kv_cache, 'cpu'),
-                        out.latency_ms,
-                        out.memory_bytes,
+                        cache_obj,
+                        total_latency_ms,
+                        memory_bytes,
                         is_speculative=True,
                         tier='cpu',
                     )
                     if not stored:
                         continue
+                    if self.serving_event.is_set():
+                        self.engine_metrics['speculative_overlap_ms'] = float(self.engine_metrics.get('speculative_overlap_ms', 0.0)) + max((time.perf_counter() - start) * 1000.0, 0.0)
+                        self.engine_metrics['speculative_overlap_events'] = int(self.engine_metrics.get('speculative_overlap_events', 0)) + 1
                     self.speculative_log.append(
                         {
                             'policy': 'frequency',
                             'score': decision.score,
-                            'latency_ms': out.latency_ms,
+                            'latency_ms': total_latency_ms,
                             'target_tier': 'cpu',
                         }
                     )
@@ -710,7 +732,10 @@ class FrequencySpeculativeEngine(ReactivePrefixCacheEngine):
 
     def shutdown(self) -> None:
         self.stop_event.set()
-        self.thread.join(timeout=1.0)
+        if self.thread is not None:
+            self.thread.join(timeout=1.0)
+            if self.thread.is_alive():
+                raise RuntimeError(f'{self.name} background worker did not stop cleanly')
         self._check_background_exception()
         self.finalize()
 
@@ -767,6 +792,11 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
                 'recent_hit_rate_final': 0.0,
             }
         )
+        self.thread: threading.Thread | None = None
+
+    def _ensure_worker_started(self) -> None:
+        if self.thread is not None or not getattr(self.backend, 'supports_external_kv', True):
+            return
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
@@ -781,6 +811,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
 
     def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
         self._check_background_exception()
+        self._ensure_worker_started()
         self.serving_event.set()
         self.last_request_time = time.time()
         try:
@@ -828,7 +859,8 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
                             gpu_utilization_pct=out.gpu_utilization_pct,
                         )
                     else:
-                        out, recomputed_tokens, cache_hit = self._prefill_with_cache_fallback(tokens, admitted_entry, match_len)
+                        out, recomputed_tokens, cache_hit, actual_match_len = self._prefill_with_cache_fallback(tokens, admitted_entry, match_len)
+                        promotion_latency_ms = 0.0
                         if (
                             cache_hit
                             and self.enable_gpu_tier
@@ -836,14 +868,17 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
                             and admitted_entry.hit_count >= self.tuning.promote_after_hits
                             and len(admitted_entry.prefix_tokens) <= self.tuning.gpu_promotion_max_prefix_tokens
                         ):
+                            move_start = time.perf_counter()
                             promoted = self.backend.move_kv_cache(admitted_entry.kv_cache, self.backend.device)
-                            if self.bank.promote(admitted_entry.prefix_tokens, promoted, admitted_entry.memory_bytes, new_tier='gpu'):
+                            promotion_latency_ms = (time.perf_counter() - move_start) * 1000.0
+                            promoted_memory_bytes = estimate_past_key_values_bytes(promoted) or self.backend.estimate_kv_cache_bytes(len(admitted_entry.prefix_tokens))
+                            if self.bank.promote(admitted_entry.prefix_tokens, promoted, promoted_memory_bytes, new_tier='gpu'):
                                 admitted_entry.tier = 'gpu'
 
                         result = RequestResult(
                             request_id=request_id,
-                            latency_ms=out.latency_ms,
-                            matched_prefix_length=match_len if cache_hit else 0,
+                            latency_ms=out.latency_ms + promotion_latency_ms,
+                            matched_prefix_length=actual_match_len if cache_hit else 0,
                             tokens_recomputed=recomputed_tokens,
                             was_cache_hit=cache_hit,
                             was_speculative_hit=admitted_entry.was_speculative if cache_hit else False,
@@ -942,6 +977,8 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
         try:
             while not self.stop_event.is_set():
                 time.sleep(0.005)
+                if not self.cache_enabled:
+                    continue
                 idle_ms = (time.time() - self.last_request_time) * 1000.0
                 if self.serving_event.is_set() or idle_ms < self.idle_threshold_ms:
                     continue
@@ -961,30 +998,34 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
                     if not self._speculation_allowed(decision.prefix_tokens, decision.expected_benefit_ms, decision.expected_cost_ms):
                         continue
 
+                    start = time.perf_counter()
                     out = self.backend.prefill(decision.prefix_tokens)
                     self._update_full_cost_stats(len(decision.prefix_tokens), out.latency_ms)
                     recent_streak = self.bank.recent_prefix_streak(decision.prefix_tokens)
                     target_tier = decision.target_tier if prefer_gpu else 'cpu'
                     if self.enable_gpu_tier and recent_streak >= 2:
                         target_tier = 'gpu'
-                    device_target = self._device_target_for_tier(target_tier)
-                    cache_obj = out.kv_cache if device_target == self.backend.device else self.backend.move_kv_cache(out.kv_cache, device_target)
+                    cache_obj, move_latency_ms, memory_bytes = self._materialize_cache_for_tier(out.kv_cache, len(decision.prefix_tokens), target_tier)
+                    total_latency_ms = float(out.latency_ms + move_latency_ms)
 
                     stored = self.bank.store(
                         decision.prefix_tokens,
                         cache_obj,
-                        out.latency_ms,
-                        out.memory_bytes,
+                        total_latency_ms,
+                        memory_bytes,
                         is_speculative=True,
                         tier=target_tier,
                     )
                     if not stored:
                         continue
+                    if self.serving_event.is_set():
+                        self.engine_metrics['speculative_overlap_ms'] = float(self.engine_metrics.get('speculative_overlap_ms', 0.0)) + max((time.perf_counter() - start) * 1000.0, 0.0)
+                        self.engine_metrics['speculative_overlap_events'] = int(self.engine_metrics.get('speculative_overlap_events', 0)) + 1
                     self.speculative_log.append(
                         {
                             'policy': 'template_aware_cost_aware_slack',
                             'score': decision.score,
-                            'latency_ms': out.latency_ms,
+                            'latency_ms': total_latency_ms,
                             'target_tier': target_tier,
                             'expected_benefit_ms': decision.expected_benefit_ms,
                             'expected_cost_ms': decision.expected_cost_ms,
@@ -996,7 +1037,10 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
 
     def shutdown(self) -> None:
         self.stop_event.set()
-        self.thread.join(timeout=1.0)
+        if self.thread is not None:
+            self.thread.join(timeout=1.0)
+            if self.thread.is_alive():
+                raise RuntimeError(f'{self.name} background worker did not stop cleanly')
         self._check_background_exception()
         self.finalize()
 

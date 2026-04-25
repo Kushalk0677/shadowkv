@@ -12,6 +12,10 @@ class PrefillResult:
     memory_bytes: int
     device: str
     gpu_utilization_pct: float | None = None
+    used_past_key_values: bool = False
+    cache_prepare_latency_ms: float = 0.0
+    cache_fallback_reason: str | None = None
+    prepared_past_length: int = 0
 
 
 class Backend:
@@ -64,7 +68,7 @@ class FakeBackend(Backend):
                 self._vocab[word] = token_id
                 self._inverse_vocab[token_id] = word
             tokens.append(self._vocab[word])
-        return tuple(tokens or [0])
+        return tuple(tokens)
 
     def decode(self, tokens: Sequence[int]) -> str:
         return ' '.join(self._inverse_vocab.get(int(t), str(t)) for t in tokens)
@@ -87,7 +91,15 @@ class FakeBackend(Backend):
         kv = {'prefix_len': len(full_tokens), 'tokens': full_tokens, 'device': self.device}
         time.sleep(min(latency_ms / 1000.0, 0.01))
         gpu_util = 35.0 if self.device.startswith('cuda') else None
-        return PrefillResult(kv_cache=kv, latency_ms=latency_ms, memory_bytes=memory_bytes, device=self.device, gpu_utilization_pct=gpu_util)
+        return PrefillResult(
+            kv_cache=kv,
+            latency_ms=latency_ms,
+            memory_bytes=memory_bytes,
+            device=self.device,
+            gpu_utilization_pct=gpu_util,
+            used_past_key_values=bool(past_tokens),
+            prepared_past_length=len(past_tokens),
+        )
 
     def move_kv_cache(self, past_key_values: Any, target: str) -> Any:
         if isinstance(past_key_values, dict):
@@ -111,24 +123,30 @@ class HuggingFaceBackend(Backend):
         self.torch = torch
         self.device = device
         self.model_name = model_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        model_dtype = None
-        if dtype == 'float16':
-            model_dtype = torch.float16
-        elif dtype == 'bfloat16':
-            model_dtype = torch.bfloat16
-        elif device.startswith('cuda'):
-            model_dtype = torch.float16
+            model_dtype = None
+            if dtype == 'float16':
+                model_dtype = torch.float16
+            elif dtype == 'bfloat16':
+                model_dtype = torch.bfloat16
+            elif device.startswith('cuda'):
+                model_dtype = torch.float16
 
-        load_kwargs = {}
-        if model_dtype is not None:
-            load_kwargs['torch_dtype'] = model_dtype
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
-        self.model.eval()
-        self.model.to(device)
+            load_kwargs = {}
+            if model_dtype is not None:
+                load_kwargs['torch_dtype'] = model_dtype
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
+            self.model.eval()
+            self.model.to(device)
+        except Exception as exc:
+            raise RuntimeError(
+                f'Failed to load Hugging Face model {model_name!r} on device {device!r}. '
+                'Check model access, local dependencies, and device availability.'
+            ) from exc
         self._nvml = _try_init_nvml(device)
         self.max_positions = int(getattr(self.model.config, 'n_positions', None) or getattr(self.model.config, 'max_position_embeddings', None) or 1024)
         config = self.model.config
@@ -205,7 +223,9 @@ class HuggingFaceBackend(Backend):
 
     def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
         tokens = list(tokens)
+        prepare_start = time.perf_counter()
         prepared_kv = self.prepare_past_key_values(past_key_values)
+        cache_prepare_latency_ms = (time.perf_counter() - prepare_start) * 1000.0
 
         if len(tokens) > self.max_positions:
             tokens = tokens[-self.max_positions:]
@@ -236,32 +256,70 @@ class HuggingFaceBackend(Backend):
             past_len = 0
             tokens = tokens[-self.max_positions:]
 
+        prepared_past_length = self._past_length(prepared_kv)
         if len(tokens) == 0:
-            return PrefillResult(kv_cache=prepared_kv, latency_ms=0.0, memory_bytes=estimate_past_key_values_bytes(prepared_kv), device=self.device, gpu_utilization_pct=None)
+            return PrefillResult(
+                kv_cache=prepared_kv,
+                latency_ms=cache_prepare_latency_ms,
+                memory_bytes=estimate_past_key_values_bytes(prepared_kv),
+                device=self.device,
+                gpu_utilization_pct=None,
+                used_past_key_values=prepared_past_length > 0,
+                cache_prepare_latency_ms=cache_prepare_latency_ms,
+                prepared_past_length=prepared_past_length,
+            )
 
         input_ids = self.torch.tensor([tokens], dtype=self.torch.long, device=self.device)
         position_ids = self.torch.arange(past_len, past_len + len(tokens), dtype=self.torch.long, device=self.device).unsqueeze(0)
+        attention_mask = self.torch.ones((1, past_len + len(tokens)), dtype=self.torch.long, device=self.device)
 
         util_before = _read_gpu_utilization(self._nvml)
         start = time.perf_counter()
+        cache_fallback_reason = None
+        used_past_key_values = prepared_past_length > 0
         try:
             with self.torch.no_grad():
-                output = self.model(input_ids=input_ids, use_cache=True, past_key_values=prepared_kv, position_ids=position_ids)
-        except (IndexError, RuntimeError, ValueError):
+                output = self.model(
+                    input_ids=input_ids,
+                    use_cache=True,
+                    past_key_values=prepared_kv,
+                    position_ids=position_ids,
+                    attention_mask=attention_mask,
+                )
+        except (IndexError, RuntimeError, ValueError) as exc:
+            cache_fallback_reason = f'backend_retry_without_cache:{exc.__class__.__name__}'
+            used_past_key_values = False
             prepared_kv = None
             input_ids = self.torch.tensor([tokens[-self.max_positions:]], dtype=self.torch.long, device=self.device)
             position_ids = self.torch.arange(0, input_ids.shape[-1], dtype=self.torch.long, device=self.device).unsqueeze(0)
+            attention_mask = self.torch.ones((1, input_ids.shape[-1]), dtype=self.torch.long, device=self.device)
             with self.torch.no_grad():
-                output = self.model(input_ids=input_ids, use_cache=True, past_key_values=None, position_ids=position_ids)
+                output = self.model(
+                    input_ids=input_ids,
+                    use_cache=True,
+                    past_key_values=None,
+                    position_ids=position_ids,
+                    attention_mask=attention_mask,
+                )
         if self.device.startswith('cuda'):
             self.torch.cuda.synchronize()
-        latency_ms = (time.perf_counter() - start) * 1000.0
+        latency_ms = cache_prepare_latency_ms + (time.perf_counter() - start) * 1000.0
         util_after = _read_gpu_utilization(self._nvml)
         util = None
         if util_before is not None and util_after is not None:
             util = float((util_before + util_after) / 2.0)
         memory_bytes = estimate_past_key_values_bytes(output.past_key_values)
-        return PrefillResult(kv_cache=output.past_key_values, latency_ms=latency_ms, memory_bytes=memory_bytes, device=self.device, gpu_utilization_pct=util)
+        return PrefillResult(
+            kv_cache=output.past_key_values,
+            latency_ms=latency_ms,
+            memory_bytes=memory_bytes,
+            device=self.device,
+            gpu_utilization_pct=util,
+            used_past_key_values=used_past_key_values,
+            cache_prepare_latency_ms=cache_prepare_latency_ms,
+            cache_fallback_reason=cache_fallback_reason,
+            prepared_past_length=prepared_past_length if used_past_key_values else 0,
+        )
 
 
 class VLLMBackend(Backend):
@@ -272,7 +330,15 @@ class VLLMBackend(Backend):
     supports_external_kv = False
     supports_native_prefix_caching = True
 
-    def __init__(self, model_name: str, device: str = 'cuda:0', dtype: str = 'auto', tensor_parallel_size: int = 1, enable_prefix_caching: bool = True) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        device: str = 'cuda:0',
+        dtype: str = 'auto',
+        tensor_parallel_size: int = 1,
+        enable_prefix_caching: bool = True,
+        trust_remote_code: bool = False,
+    ) -> None:
         try:
             from transformers import AutoTokenizer
             from vllm import LLM, SamplingParams
@@ -290,7 +356,7 @@ class VLLMBackend(Backend):
             'model': model_name,
             'tensor_parallel_size': tensor_parallel_size,
             'enable_prefix_caching': enable_prefix_caching,
-            'trust_remote_code': True,
+            'trust_remote_code': trust_remote_code,
         }
         if dtype != 'auto':
             llm_kwargs['dtype'] = dtype
@@ -328,7 +394,14 @@ class VLLMBackend(Backend):
         token_count = len(tokens) + len(generated.outputs[0].token_ids)
         memory_bytes = int(max(token_count, 1) * 256)
         meta = {'native_prefix_caching': self.enable_prefix_caching, 'token_count': token_count}
-        return PrefillResult(kv_cache=meta, latency_ms=latency_ms, memory_bytes=memory_bytes, device=self.device, gpu_utilization_pct=util)
+        return PrefillResult(
+            kv_cache=meta,
+            latency_ms=latency_ms,
+            memory_bytes=memory_bytes,
+            device=self.device,
+            gpu_utilization_pct=util,
+            used_past_key_values=False,
+        )
 
 
 def estimate_past_key_values_bytes(past_key_values: Any) -> int:
@@ -375,7 +448,15 @@ def supports_gpu() -> bool:
         return False
 
 
-def load_backend(backend: str, model_name: str | None = None, device: str = 'cpu', dtype: str = 'auto', tensor_parallel_size: int = 1, enable_prefix_caching: bool = True) -> Backend:
+def load_backend(
+    backend: str,
+    model_name: str | None = None,
+    device: str = 'cpu',
+    dtype: str = 'auto',
+    tensor_parallel_size: int = 1,
+    enable_prefix_caching: bool = True,
+    trust_remote_code: bool = False,
+) -> Backend:
     if backend == 'fake':
         return FakeBackend(device=device)
     if backend == 'hf':
@@ -385,5 +466,12 @@ def load_backend(backend: str, model_name: str | None = None, device: str = 'cpu
     if backend == 'vllm':
         if not model_name:
             raise ValueError('model_name is required for vllm backend')
-        return VLLMBackend(model_name=model_name, device=device, dtype=dtype, tensor_parallel_size=tensor_parallel_size, enable_prefix_caching=enable_prefix_caching)
+        return VLLMBackend(
+            model_name=model_name,
+            device=device,
+            dtype=dtype,
+            tensor_parallel_size=tensor_parallel_size,
+            enable_prefix_caching=enable_prefix_caching,
+            trust_remote_code=trust_remote_code,
+        )
     raise ValueError(f'Unknown backend: {backend}')

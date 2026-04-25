@@ -33,6 +33,20 @@ def result_name(model: str, dataset: str) -> str:
     return f'benchmark_hf_{model_slug}_public_dataset_{dataset}_cpu.json'
 
 
+def result_matches_config(path: Path, model: str, dataset: str, n_requests: int) -> bool:
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return False
+    config = data.get('config', {})
+    return (
+        config.get('resolved_model') == MODEL_PRESETS.get(model, model)
+        and config.get('dataset') == dataset
+        and int(config.get('n_requests', -1)) == int(n_requests)
+        and config.get('device') == 'cpu'
+    )
+
+
 def summarize_result(path: Path) -> dict:
     data = json.loads(path.read_text())
     engines = {}
@@ -91,7 +105,7 @@ def main() -> int:
             }
             key = f'{model}::{dataset}'
 
-            if result_path.exists() and not args.force:
+            if result_path.exists() and not args.force and result_matches_config(result_path, model, dataset, args.n_requests):
                 entry['status'] = 'skipped_existing'
                 entry['summary'] = summarize_result(result_path)
                 status_by_key[key] = entry
@@ -127,23 +141,21 @@ def main() -> int:
             log_path = logs_dir / f'{model}_{dataset}.log'
             print(f'RUN model={model} dataset={dataset}', flush=True)
             started = time.perf_counter()
+            if log_path.exists():
+                log_path.unlink()
             try:
-                completed = subprocess.run(
-                    command,
-                    cwd=root,
-                    text=True,
-                    capture_output=True,
-                    timeout=args.timeout_seconds,
-                )
+                with log_path.open('w', encoding='utf-8') as log_file:
+                    log_file.write('COMMAND:\n' + ' '.join(command) + '\n\n')
+                    log_file.flush()
+                    completed = subprocess.run(
+                        command,
+                        cwd=root,
+                        text=True,
+                        stdout=log_file,
+                        stderr=subprocess.STDOUT,
+                        timeout=args.timeout_seconds,
+                    )
                 elapsed = time.perf_counter() - started
-                log_path.write_text(
-                    'COMMAND:\n'
-                    + ' '.join(command)
-                    + '\n\nSTDOUT:\n'
-                    + completed.stdout
-                    + '\n\nSTDERR:\n'
-                    + completed.stderr
-                )
                 entry['elapsed_seconds'] = round(elapsed, 2)
                 entry['exit_code'] = completed.returncode
                 if completed.returncode == 0 and result_path.exists():
@@ -154,14 +166,14 @@ def main() -> int:
                     entry['log_file'] = str(log_path.relative_to(root))
             except subprocess.TimeoutExpired as exc:
                 elapsed = time.perf_counter() - started
-                log_path.write_text(
-                    'COMMAND:\n'
-                    + ' '.join(command)
-                    + '\n\nSTDOUT:\n'
-                    + (exc.stdout or '')
-                    + '\n\nSTDERR:\n'
-                    + (exc.stderr or '')
-                )
+                stdout = exc.stdout.decode('utf-8', errors='replace') if isinstance(exc.stdout, bytes) else (exc.stdout or '')
+                stderr = exc.stderr.decode('utf-8', errors='replace') if isinstance(exc.stderr, bytes) else (exc.stderr or '')
+                with log_path.open('a', encoding='utf-8') as log_file:
+                    log_file.write('\nTIMEOUT\n')
+                    if stdout:
+                        log_file.write('\nSTDOUT:\n' + stdout)
+                    if stderr:
+                        log_file.write('\nSTDERR:\n' + stderr)
                 entry['status'] = 'timeout'
                 entry['elapsed_seconds'] = round(elapsed, 2)
                 entry['log_file'] = str(log_path.relative_to(root))

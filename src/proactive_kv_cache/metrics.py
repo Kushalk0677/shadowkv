@@ -28,6 +28,7 @@ class RunSummary:
     reuse_attempts: int = 0
     reuse_successes: int = 0
     reuse_failures: int = 0
+    reuse_backend_fallbacks: int = 0
     store_attempts: int = 0
     store_successes: int = 0
     store_skips: int = 0
@@ -43,6 +44,8 @@ class RunSummary:
     reuse_success_rate: float = 0.0
     cache_active_final: bool = True
     auto_disabled_reason: str | None = None
+    speculative_overlap_ms: float = 0.0
+    speculative_overlap_events: int = 0
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -73,7 +76,7 @@ def summarize_run(
     else:
         wasted_ratio_fallback = wasted_precomputes / max(speculative_precomputes, 1)
         wasted_compute_ms = float(speculative_cost_ms * wasted_ratio_fallback)
-    wasted_compute_ratio = float(wasted_compute_ms / max(speculative_cost_ms, 1e-9))
+    wasted_compute_ratio = float(min(wasted_compute_ms / max(speculative_cost_ms, 1e-9), 1.0))
 
     if 'useful_speculative_savings_ms' in bank_metrics:
         utility_proxy = float(bank_metrics['useful_speculative_savings_ms'] - wasted_compute_ms)
@@ -89,7 +92,7 @@ def summarize_run(
 
     merged = dict(extra_metrics or {})
     for key in (
-        'reuse_attempts', 'reuse_successes', 'reuse_failures', 'store_attempts', 'store_successes', 'store_skips', 'bypassed_matches',
+        'reuse_attempts', 'reuse_successes', 'reuse_failures', 'reuse_backend_fallbacks', 'store_attempts', 'store_successes', 'store_skips', 'bypassed_matches',
         'requests_seen', 'reused_prefix_tokens_total', 'recompute_tokens_total', 'estimated_tokens_saved_total'
     ):
         merged[key] = int(merged.get(key, bank_metrics.get(key, 0)))
@@ -98,7 +101,9 @@ def summarize_run(
     merged['cache_active_final'] = bool(merged.get('cache_active_final', True))
     merged['auto_disabled_reason'] = merged.get('auto_disabled_reason')
     merged['avg_reused_prefix_tokens'] = float(merged['reused_prefix_tokens_total'] / max(merged['reuse_successes'], 1))
-    merged['reuse_success_rate'] = float(merged['reuse_successes'] / max(merged['reuse_attempts'], 1))
+    merged['reuse_success_rate'] = float(merged['reuse_successes'] / max(merged['reuse_successes'] + merged['reuse_failures'], 1))
+    merged['speculative_overlap_ms'] = float(merged.get('speculative_overlap_ms', 0.0))
+    merged['speculative_overlap_events'] = int(merged.get('speculative_overlap_events', 0))
 
     return RunSummary(
         mean_latency_ms=mean_latency,
@@ -121,6 +126,7 @@ def summarize_run(
         reuse_attempts=merged['reuse_attempts'],
         reuse_successes=merged['reuse_successes'],
         reuse_failures=merged['reuse_failures'],
+        reuse_backend_fallbacks=merged['reuse_backend_fallbacks'],
         store_attempts=merged['store_attempts'],
         store_successes=merged['store_successes'],
         store_skips=merged['store_skips'],
@@ -136,4 +142,6 @@ def summarize_run(
         reuse_success_rate=merged['reuse_success_rate'],
         cache_active_final=merged['cache_active_final'],
         auto_disabled_reason=merged['auto_disabled_reason'],
+        speculative_overlap_ms=merged['speculative_overlap_ms'],
+        speculative_overlap_events=merged['speculative_overlap_events'],
     )

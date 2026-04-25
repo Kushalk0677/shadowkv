@@ -1,5 +1,5 @@
 from proactive_kv_cache.engines import ReactivePrefixCacheEngine, ShadowKVEngine
-from proactive_kv_cache.models import FakeBackend
+from proactive_kv_cache.models import FakeBackend, PrefillResult
 
 
 class FailingCacheBackend(FakeBackend):
@@ -21,6 +21,23 @@ class CountingBackend(FakeBackend):
 
     def prefill(self, tokens, past_key_values=None):
         self.calls.append((tuple(tokens), past_key_values is not None))
+        return super().prefill(tokens, past_key_values=past_key_values)
+
+
+class InternalFallbackBackend(FakeBackend):
+    def prefill(self, tokens, past_key_values=None):
+        if past_key_values is not None:
+            result = super().prefill(tokens, past_key_values=None)
+            return PrefillResult(
+                kv_cache=result.kv_cache,
+                latency_ms=result.latency_ms,
+                memory_bytes=result.memory_bytes,
+                device=result.device,
+                gpu_utilization_pct=result.gpu_utilization_pct,
+                used_past_key_values=False,
+                cache_fallback_reason='backend_retry_without_cache:RuntimeError',
+                prepared_past_length=0,
+            )
         return super().prefill(tokens, past_key_values=past_key_values)
 
 
@@ -54,11 +71,26 @@ def test_reactive_engine_falls_back_to_full_recompute_when_cached_prefill_fails(
     assert result.tokens_recomputed == len(extended_tokens)
 
 
+def test_reactive_engine_treats_internal_backend_cache_fallback_as_miss():
+    backend = InternalFallbackBackend()
+    engine = ReactivePrefixCacheEngine(backend=backend)
+    cached_tokens = (1, 2, 3, 4, 5, 6)
+    extended_tokens = (1, 2, 3, 4, 5, 6, 7)
+
+    engine.serve_tokens(1, cached_tokens)
+    result = engine.serve_tokens(2, extended_tokens)
+
+    assert result.was_cache_hit is False
+    assert result.tokens_recomputed == len(extended_tokens)
+    assert engine.engine_metrics['reuse_failures'] >= 1
+
+
 def test_shadowkv_reports_promoted_gpu_tier_consistently():
     backend = FakeBackend(device='cuda:0')
     engine = ShadowKVEngine(backend=backend, enable_gpu_tier=True)
     engine.stop_event.set()
-    engine.thread.join(timeout=1.0)
+    if engine.thread is not None:
+        engine.thread.join(timeout=1.0)
     tokens = (1, 2, 3, 4, 5, 6)
 
     engine.bank.observe_query(tokens)
@@ -76,7 +108,8 @@ def test_shadowkv_controller_pauses_when_pending_speculation_is_already_outstand
     backend = FakeBackend(device='cpu')
     engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=1.0)
     engine.stop_event.set()
-    engine.thread.join(timeout=1.0)
+    if engine.thread is not None:
+        engine.thread.join(timeout=1.0)
 
     engine.engine_metrics['requests_seen'] = 20
     first = (1, 2, 3, 4)
@@ -94,7 +127,8 @@ def test_shadowkv_controller_enters_cooldown_after_wasted_speculation():
     backend = FakeBackend(device='cpu')
     engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=20.0)
     engine.stop_event.set()
-    engine.thread.join(timeout=1.0)
+    if engine.thread is not None:
+        engine.thread.join(timeout=1.0)
 
     engine.engine_metrics['requests_seen'] = 20
     prefix = (1, 2, 3, 4)
@@ -111,7 +145,8 @@ def test_shadowkv_controller_pauses_when_recent_reuse_density_is_too_low():
     backend = FakeBackend(device='cpu')
     engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=1.0)
     engine.stop_event.set()
-    engine.thread.join(timeout=1.0)
+    if engine.thread is not None:
+        engine.thread.join(timeout=1.0)
 
     engine.engine_metrics['requests_seen'] = 20
     engine._recent_request_window.extend(
@@ -135,7 +170,8 @@ def test_shadowkv_cpu_controller_opens_up_when_recent_reuse_is_strong():
     backend = FakeBackend(device='cpu')
     engine = ShadowKVEngine(backend=backend, enable_gpu_tier=False, speculative_k=2, idle_threshold_ms=1.0)
     engine.stop_event.set()
-    engine.thread.join(timeout=1.0)
+    if engine.thread is not None:
+        engine.thread.join(timeout=1.0)
 
     engine.engine_metrics['requests_seen'] = 20
     engine._recent_request_window.extend(

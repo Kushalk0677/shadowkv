@@ -22,8 +22,8 @@ from proactive_kv_cache.engines import (
     ReactivePrefixCacheEngine,
     ShadowKVEngine,
     StrictReactivePrefixCacheEngine,
-    compare_named_runs,
     maybe_shutdown,
+    summarize_engine,
 )
 from proactive_kv_cache.models import load_backend
 from proactive_kv_cache.policy import CostAwareSlackPolicy
@@ -103,8 +103,8 @@ def _profile_shadowkv_costs(backend) -> dict:
         if warmup_tokens:
             try:
                 backend.prefill(warmup_tokens)
-            except Exception:
-                pass
+            except Exception as exc:
+                raise RuntimeError('ShadowKV calibration warmup failed before benchmarking') from exc
     for length in candidate_lengths:
         sample = tuple(tokens[:length])
         if len(sample) < length:
@@ -226,46 +226,70 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
     return policy_kwargs, calibration
 
 
-def build_engines(args, backend):
-    shadowkv_policy_kwargs = None
-    shadowkv_policy_calibration = None
-    if args.include_experimental and getattr(backend, 'supports_external_kv', True):
-        shadowkv_policy_kwargs, shadowkv_policy_calibration = _build_shadowkv_policy_kwargs(backend, prompt_mode=args.resolved_prompt_mode)
-    args.shadowkv_policy_calibration = shadowkv_policy_calibration
-    args.shadowkv_policy_kwargs = shadowkv_policy_kwargs
-    engines = [NoCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)]
+def load_backend_from_args(args):
+    return load_backend(
+        args.backend,
+        model_name=resolve_model(args.model),
+        device=args.device,
+        dtype=args.dtype,
+        tensor_parallel_size=args.tensor_parallel_size,
+        enable_prefix_caching=not args.disable_native_prefix_caching,
+        trust_remote_code=getattr(args, 'trust_remote_code', False),
+    )
 
-    if getattr(backend, 'supports_native_prefix_caching', False):
-        engines.append(NativePrefixCachingEngine(backend=backend, max_memory_mb=args.max_memory_mb))
 
-    if getattr(backend, 'supports_external_kv', True):
-        engines.extend(
-            [
-                ReactivePrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb),
-                GreedyPrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb),
-                StrictReactivePrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb),
-            ]
+def list_engine_names(args) -> list[str]:
+    names = ['no_cache']
+    if args.backend == 'vllm':
+        names.append('native_prefix_cache')
+        return names
+    names.extend(
+        [
+            'reactive_prefix_cache',
+            'greedy_prefix_cache',
+            'strict_reactive_prefix_cache',
+        ]
+    )
+    if args.include_experimental:
+        names.extend(['frequency_speculative', 'shadow_kv'])
+    return names
+
+
+def build_engine(args, backend, engine_name: str):
+    if engine_name == 'no_cache':
+        return NoCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)
+    if engine_name == 'native_prefix_cache':
+        return NativePrefixCachingEngine(backend=backend, max_memory_mb=args.max_memory_mb)
+    if engine_name == 'reactive_prefix_cache':
+        return ReactivePrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)
+    if engine_name == 'greedy_prefix_cache':
+        return GreedyPrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)
+    if engine_name == 'strict_reactive_prefix_cache':
+        return StrictReactivePrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)
+    if engine_name == 'frequency_speculative':
+        return FrequencySpeculativeEngine(
+            backend=backend,
+            max_memory_mb=args.max_memory_mb,
+            speculative_k=args.speculative_k,
+            idle_threshold_ms=args.idle_threshold_ms,
         )
-        if args.include_experimental:
-            engines.extend(
-                [
-                    FrequencySpeculativeEngine(
-                        backend=backend,
-                        max_memory_mb=args.max_memory_mb,
-                        speculative_k=args.speculative_k,
-                        idle_threshold_ms=args.idle_threshold_ms,
-                    ),
-                    ShadowKVEngine(
-                        backend=backend,
-                        max_memory_mb=args.max_memory_mb,
-                        speculative_k=args.speculative_k,
-                        idle_threshold_ms=args.idle_threshold_ms,
-                        policy=CostAwareSlackPolicy(**shadowkv_policy_kwargs),
-                        enable_gpu_tier=args.device.startswith('cuda'),
-                    ),
-                ]
-            )
-    return engines
+    if engine_name == 'shadow_kv':
+        calibration_backend = load_backend_from_args(args)
+        try:
+            shadowkv_policy_kwargs, shadowkv_policy_calibration = _build_shadowkv_policy_kwargs(calibration_backend, prompt_mode=args.resolved_prompt_mode)
+        finally:
+            del calibration_backend
+        args.shadowkv_policy_calibration = shadowkv_policy_calibration
+        args.shadowkv_policy_kwargs = shadowkv_policy_kwargs
+        return ShadowKVEngine(
+            backend=backend,
+            max_memory_mb=args.max_memory_mb,
+            speculative_k=args.speculative_k,
+            idle_threshold_ms=args.idle_threshold_ms,
+            policy=CostAwareSlackPolicy(**shadowkv_policy_kwargs),
+            enable_gpu_tier=args.device.startswith('cuda'),
+        )
+    raise ValueError(f'Unknown engine name: {engine_name}')
 
 
 def main() -> None:
@@ -275,6 +299,7 @@ def main() -> None:
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--dtype', default='auto')
     parser.add_argument('--tensor_parallel_size', type=int, default=1)
+    parser.add_argument('--trust_remote_code', action='store_true')
     parser.add_argument('--disable_native_prefix_caching', action='store_true')
     parser.add_argument('--include_experimental', action='store_true')
     parser.add_argument('--workload', choices=['synthetic', 'public_dataset'], default='synthetic')
@@ -295,21 +320,25 @@ def main() -> None:
     parser.add_argument('--output_dir', default='results')
     args = parser.parse_args()
     args.resolved_prompt_mode = resolve_prompt_mode(args)
+    args.shadowkv_policy_calibration = None
+    args.shadowkv_policy_kwargs = None
 
     set_seed(args.seed)
-    backend = load_backend(
-        args.backend,
-        model_name=resolve_model(args.model),
-        device=args.device,
-        dtype=args.dtype,
-        tensor_parallel_size=args.tensor_parallel_size,
-        enable_prefix_caching=not args.disable_native_prefix_caching,
-    )
     requests = build_requests(args)
-    engines = build_engines(args, backend)
-    shared_prefix_token_cache = {}
+    engine_names = list_engine_names(args)
+    summary = {}
+    capabilities = None
 
-    for engine in engines:
+    for engine_name in engine_names:
+        set_seed(args.seed)
+        backend = load_backend_from_args(args)
+        if capabilities is None:
+            capabilities = {
+                'supports_external_kv': getattr(backend, 'supports_external_kv', False),
+                'supports_native_prefix_caching': getattr(backend, 'supports_native_prefix_caching', False),
+            }
+        engine = build_engine(args, backend, engine_name)
+        shared_prefix_token_cache = {}
         for idx, req in enumerate(requests):
             maybe_sleep(idx, requests, args.simulate_arrivals, args.max_arrival_sleep_ms)
             tokens = backend.tokenize(req.prompt)
@@ -324,14 +353,18 @@ def main() -> None:
                 metadata['shared_prefix_hint_tokens'] = min(int(hint_len), len(tokens))
             engine.serve_tokens(req.request_id, tokens, metadata=metadata)
         maybe_shutdown(engine)
+        summary[engine.name] = summarize_engine(engine)
+        del engine
+        del backend
 
-    summary = compare_named_runs(engines)
+    if 'no_cache' in summary:
+        baseline = summary['no_cache']
+        for engine_summary in summary.values():
+            engine_summary['speedup_vs_no_cache_mean'] = baseline['mean_latency_ms'] / max(engine_summary['mean_latency_ms'], 1e-9)
+            engine_summary['speedup_vs_no_cache_p95'] = baseline['p95_latency_ms'] / max(engine_summary['p95_latency_ms'], 1e-9)
     summary['config'] = vars(args)
     summary['config']['resolved_model'] = resolve_model(args.model)
-    summary['capabilities'] = {
-        'supports_external_kv': getattr(backend, 'supports_external_kv', False),
-        'supports_native_prefix_caching': getattr(backend, 'supports_native_prefix_caching', False),
-    }
+    summary['capabilities'] = capabilities or {}
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

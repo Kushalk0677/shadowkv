@@ -146,7 +146,9 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         branching_factor: int,
         arrival_rate_rps: float,
     ) -> float:
-        horizon_requests = max(arrival_rate_rps * self.reuse_horizon_s, 1.0)
+        horizon_requests = max(arrival_rate_rps * self.reuse_horizon_s, 0.0)
+        if horizon_requests <= 0.0:
+            return max(reuse_probability * 0.25, 0.0)
         streak_multiplier = 1.0 + 0.20 * min(recent_streak, 4)
         support_multiplier = 1.0 + 0.75 * min(recent_support, 1.0)
         branching_multiplier = 1.0 + self.branching_weight * min(max(branching_factor - 1, 0), 4)
@@ -199,6 +201,8 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         return kept
 
     def rank(self, bank: TieredStateBank, budget_k: int, prefer_gpu: bool = False) -> List[SpeculationDecision]:
+        if budget_k <= 0:
+            return []
         candidate_rows: List[dict] = []
         target_tier = 'gpu' if prefer_gpu else 'cpu'
         candidates = bank.get_candidate_stats(max_prefix_len=self.max_prefix_len, exclude_stored=True)

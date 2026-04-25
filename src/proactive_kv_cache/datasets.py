@@ -246,6 +246,10 @@ def list_prompt_modes() -> List[str]:
 
 def _clip(text: str, max_chars: int = 900) -> str:
     text = ' '.join(text.split())
+    max_words = max(max_chars // 5, 32)
+    words = text.split()
+    if len(words) > max_words:
+        text = ' '.join(words[:max_words])
     return text[:max_chars].strip()
 
 
@@ -413,6 +417,8 @@ def _apply_prompt_mode(dataset_name: str, dataset_type: str, base_prompt: str, p
 
 
 def load_public_text_rows(dataset_name: str, split: str, limit: int, seed: int = 42, prompt_mode: str = 'raw') -> List[Dict]:
+    if limit <= 0:
+        raise ValueError('limit must be positive')
     if dataset_name not in DATASET_REGISTRY:
         valid = ', '.join(list_datasets())
         raise ValueError(f'Unknown dataset_name: {dataset_name}. Valid options: {valid}')
@@ -429,6 +435,13 @@ def load_public_text_rows(dataset_name: str, split: str, limit: int, seed: int =
     ds = load_dataset(hf_name, split=actual_split, **load_kwargs)
     if hasattr(ds, 'shuffle'):
         ds = ds.shuffle(seed=seed)
+    if hasattr(ds, 'select'):
+        try:
+            sample_cap = min(len(ds), max(limit * 8, limit))
+            if sample_cap < len(ds):
+                ds = ds.select(range(sample_cap))
+        except TypeError:
+            pass
 
     rows: List[Dict] = []
     for ex in ds:
@@ -448,7 +461,13 @@ def load_public_text_rows(dataset_name: str, split: str, limit: int, seed: int =
             break
 
     if not rows:
-        sample_keys = list(ds[0].keys()) if len(ds) > 0 else []
+        sample_keys: List[str] = []
+        try:
+            sample = ds[0]
+            if isinstance(sample, dict):
+                sample_keys = list(sample.keys())
+        except Exception:
+            sample_keys = []
         raise RuntimeError(
             f'No usable text rows found for dataset {dataset_name} ({hf_name}) split={actual_split}. '
             f'Sample keys: {sample_keys}'

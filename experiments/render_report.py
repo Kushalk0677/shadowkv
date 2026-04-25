@@ -13,6 +13,8 @@ def render_markdown(result: dict, source_name: str) -> str:
     config = result.get('config', {})
     engines = [(name, summary) for name, summary in result.items() if isinstance(summary, dict) and 'mean_latency_ms' in summary]
     engines.sort(key=lambda item: item[1]['mean_latency_ms'])
+    def escape_cell(value: object) -> str:
+        return str(value).replace('|', '\\|').replace('\n', ' ')
     lines = []
     lines.append(f"# Benchmark report: {source_name}")
     lines.append("")
@@ -24,11 +26,15 @@ def render_markdown(result: dict, source_name: str) -> str:
     lines.append("")
     lines.append("## Ranked results")
     lines.append("")
+    if not engines:
+        lines.append("_No engine summaries were found in this result file._")
+        lines.append("")
+        return "\n".join(lines)
     lines.append("| Engine | Mean latency (ms) | P95 latency (ms) | Speedup vs baseline | Hit rate | Reuse success rate | Cache active at end | Auto-disabled reason |")
     lines.append("|---|---:|---:|---:|---:|---:|:---:|---|")
     for name, s in engines:
         lines.append(
-            f"| {name} | {s['mean_latency_ms']:.2f} | {s['p95_latency_ms']:.2f} | {s.get('speedup_vs_no_cache_mean', 0.0):.3f} | {s.get('hit_rate', 0.0):.3f} | {s.get('reuse_success_rate', 0.0):.3f} | {str(s.get('cache_active_final', True))} | {s.get('auto_disabled_reason') or ''} |"
+            f"| {escape_cell(name)} | {s['mean_latency_ms']:.2f} | {s['p95_latency_ms']:.2f} | {s.get('speedup_vs_no_cache_mean', 0.0):.3f} | {s.get('hit_rate', 0.0):.3f} | {s.get('reuse_success_rate', 0.0):.3f} | {escape_cell(str(s.get('cache_active_final', True)))} | {escape_cell(s.get('auto_disabled_reason') or '')} |"
         )
     lines.append("")
     best_name, best_summary = engines[0]

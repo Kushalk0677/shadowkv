@@ -95,7 +95,9 @@ class SyntheticWorkloadGenerator:
         self.long_template_probs = long_probs / long_probs.sum()
 
     def generate(self, n_requests: int) -> List[Request]:
-        current_time = time.time()
+        if n_requests <= 0:
+            raise ValueError('n_requests must be positive')
+        current_time = 0.0
         rows: List[Request] = []
         i = 0
 
@@ -170,6 +172,8 @@ SYNTHETIC_VARIANTS = {
 
 
 def make_synthetic_workload(variant: str, n_requests: int, seed: int = 42, mean_inter_arrival_ms: float | None = None) -> List[Request]:
+    if n_requests <= 0:
+        raise ValueError('n_requests must be positive')
     if variant not in SYNTHETIC_VARIANTS:
         valid = ', '.join(sorted(SYNTHETIC_VARIANTS.keys()))
         raise ValueError(f'Unknown variant: {variant}. Valid variants: {valid}')
@@ -188,12 +192,13 @@ def make_public_dataset_workload(
     mean_inter_arrival_ms: float = 150.0,
     prompt_mode: str = 'raw',
 ) -> List[Request]:
+    if n_requests <= 0:
+        raise ValueError('n_requests must be positive')
     from .datasets import load_public_text_rows
 
     rows = load_public_text_rows(dataset_name=dataset_name, split=split, limit=n_requests, seed=seed, prompt_mode=prompt_mode)
-    now = time.time()
     rng = np.random.default_rng(seed)
-    current = now
+    current = 0.0
     requests: List[Request] = []
 
     for i, row in enumerate(rows):

@@ -21,6 +21,7 @@ class CacheEntry:
     hit_count: int = 0
     was_speculative: bool = False
     speculative_reused: bool = False
+    speculative_waste_recorded: bool = False
     first_reuse_at: float | None = None
 
     def utility_score(self, now: float, recency_weight: float = 0.25) -> float:
@@ -41,6 +42,8 @@ class TieredStateBank:
         self.min_match_length = min_match_length
         self.entries: Dict[Tuple[int, ...], CacheEntry] = {}
         self.frequency_counter: Dict[Tuple[int, ...], float] = defaultdict(float)
+        self._last_frequency_step: Dict[Tuple[int, ...], int] = defaultdict(int)
+        self._frequency_step = 0
         self.observation_count: Dict[Tuple[int, ...], int] = defaultdict(int)
         self.recent_queries: deque[Tuple[int, ...]] = deque(maxlen=48)
         self.recent_query_times: deque[float] = deque(maxlen=48)
@@ -79,7 +82,7 @@ class TieredStateBank:
 
     def get_frequency(self, prefix_tokens: Tuple[int, ...]) -> float:
         with self._lock:
-            return float(self.frequency_counter.get(prefix_tokens, 0.0))
+            return float(self._decayed_frequency_unlocked(prefix_tokens))
 
     def get_observation_count(self, prefix_tokens: Tuple[int, ...]) -> int:
         with self._lock:
@@ -97,7 +100,7 @@ class TieredStateBank:
                     continue
                 if max_prefix_len is not None and len(prefix) > max_prefix_len:
                     continue
-                items.append((prefix, float(freq)))
+                items.append((prefix, float(self._decayed_frequency_unlocked(prefix))))
             return items
 
     def get_candidate_stats(self, max_prefix_len: int | None = None, exclude_stored: bool = True) -> List[Tuple[Tuple[int, ...], float, int, int]]:
@@ -111,7 +114,7 @@ class TieredStateBank:
                 items.append(
                     (
                         prefix,
-                        float(freq),
+                        float(self._decayed_frequency_unlocked(prefix)),
                         int(self.observation_count.get(prefix, 0)),
                         len(self.continuation_tokens.get(prefix, set())),
                     )
@@ -162,14 +165,16 @@ class TieredStateBank:
         effective_limit = min(len(tokens), reusable_prefix_limit) if reusable_prefix_limit is not None else len(tokens)
         tracked_prefix_lengths = tracked_prefix_lengths or self._default_prefix_lengths(tokens[:effective_limit])
         with self._lock:
+            self._frequency_step += 1
             self.recent_queries.append(tokens)
             self.recent_query_times.append(observed_at if observed_at is not None else time.time())
             for length in tracked_prefix_lengths:
                 if length < self.min_match_length or length > len(tokens) or length > effective_limit:
                     continue
                 prefix = tokens[:length]
-                old = self.frequency_counter[prefix]
+                old = self._decayed_frequency_unlocked(prefix)
                 self.frequency_counter[prefix] = self.ema_alpha + (1.0 - self.ema_alpha) * old
+                self._last_frequency_step[prefix] = self._frequency_step
                 self.observation_count[prefix] += 1
                 if length < len(tokens):
                     self.continuation_tokens[prefix].add(tokens[length])
@@ -188,7 +193,7 @@ class TieredStateBank:
                 return None
             entry.last_access = time.time()
             entry.hit_count += 1
-            entry.frequency = min(1.0, (1.0 - self.ema_alpha) * entry.frequency + self.ema_alpha)
+            entry.frequency = min(1.0, (1.0 - self.ema_alpha) * self._decayed_frequency_unlocked(prefix_tokens) + self.ema_alpha)
             self.metrics['hits'] += 1
             if entry.was_speculative:
                 self.metrics['speculative_hits'] += 1
@@ -221,10 +226,12 @@ class TieredStateBank:
     ) -> bool:
         if len(prefix_tokens) < self.min_match_length:
             return False
+        if memory_bytes > self.max_memory_bytes:
+            return False
 
         with self._lock:
             if prefix_tokens in self.entries:
-                self._remove_unlocked(prefix_tokens)
+                self._remove_unlocked(prefix_tokens, count_speculative_waste=False)
 
             while self.current_memory_bytes + memory_bytes > self.max_memory_bytes:
                 if not self._evict_one_unlocked():
@@ -233,7 +240,7 @@ class TieredStateBank:
             entry = CacheEntry(
                 prefix_tokens=prefix_tokens,
                 kv_cache=kv_cache,
-                frequency=self.frequency_counter.get(prefix_tokens, 0.02),
+                frequency=self._decayed_frequency_unlocked(prefix_tokens) or 0.02,
                 last_access=time.time(),
                 generation_cost_ms=generation_cost_ms,
                 memory_bytes=memory_bytes,
@@ -290,6 +297,8 @@ class TieredStateBank:
         with self._lock:
             for entry in self.entries.values():
                 if entry.was_speculative and not entry.speculative_reused:
+                    if entry.speculative_waste_recorded:
+                        continue
                     self._mark_speculative_wasted_unlocked(entry)
 
     def top_candidates(self, k: int, exclude_stored: bool = True, max_prefix_len: int | None = 24) -> List[Tuple[int, ...]]:
@@ -302,7 +311,7 @@ class TieredStateBank:
                     continue
                 effective_len = min(len(prefix), 16)
                 branch_bonus = 1.0 + 0.10 * min(len(self.continuation_tokens.get(prefix, set())), 4)
-                score = float(freq) * branch_bonus * (1.0 + 0.08 * effective_len)
+                score = float(self._decayed_frequency_unlocked(prefix)) * branch_bonus * (1.0 + 0.08 * effective_len)
                 items.append((prefix, score))
             items.sort(key=lambda x: (-x[1], len(x[0])))
             return [prefix for prefix, _ in items[:k]]
@@ -314,7 +323,7 @@ class TieredStateBank:
             pending_speculative_entries = 0
             for entry in self.entries.values():
                 tier_counts[f'{entry.tier}_entries'] = tier_counts.get(f'{entry.tier}_entries', 0) + 1
-                if entry.was_speculative and not entry.speculative_reused:
+                if entry.was_speculative and not entry.speculative_reused and not entry.speculative_waste_recorded:
                     pending_speculative_entries += 1
             return {
                 **self.metrics,
@@ -346,13 +355,13 @@ class TieredStateBank:
             return None
         return best_key, entry, best_len
 
-    def _remove_unlocked(self, prefix_tokens: Tuple[int, ...]) -> None:
+    def _remove_unlocked(self, prefix_tokens: Tuple[int, ...], count_speculative_waste: bool = True) -> None:
         entry = self.entries.pop(prefix_tokens, None)
         if entry is None:
             return
         self._trie_remove_unlocked(prefix_tokens)
         self.current_memory_bytes -= entry.memory_bytes
-        if entry.was_speculative and not entry.speculative_reused:
+        if count_speculative_waste and entry.was_speculative and not entry.speculative_reused and not entry.speculative_waste_recorded:
             self._mark_speculative_wasted_unlocked(entry)
 
     def _evict_one_unlocked(self, exclude_key: Tuple[int, ...] | None = None) -> bool:
@@ -379,9 +388,21 @@ class TieredStateBank:
         return sorted(length for length in lengths if self.min_match_length <= length <= n)
 
     def _mark_speculative_wasted_unlocked(self, entry: CacheEntry) -> None:
+        if entry.speculative_waste_recorded:
+            return
         self.metrics['wasted_precomputes'] += 1
         self.metrics['wasted_compute_ms'] += float(entry.generation_cost_ms)
-        entry.speculative_reused = True
+        entry.speculative_waste_recorded = True
+
+    def _decayed_frequency_unlocked(self, prefix_tokens: Tuple[int, ...]) -> float:
+        base = float(self.frequency_counter.get(prefix_tokens, 0.0))
+        if base <= 0.0:
+            return 0.0
+        last_step = int(self._last_frequency_step.get(prefix_tokens, self._frequency_step))
+        delta_steps = max(self._frequency_step - last_step, 0)
+        if delta_steps <= 0:
+            return base
+        return float(base * ((1.0 - self.ema_alpha) ** delta_steps))
 
     def _trie_insert_unlocked(self, prefix_tokens: Tuple[int, ...]) -> None:
         node = self._entry_trie
