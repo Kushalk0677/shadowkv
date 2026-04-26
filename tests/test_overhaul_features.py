@@ -28,9 +28,9 @@ def test_rag_variant_emits_rag_prompt_metadata():
 
 def test_prompt_modes_add_shared_scaffolds():
     base_prompt = 'Instruction: do the thing\nAssistant response:'
-    raw_prompt, raw_shared = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'raw')
-    templated_prompt, templated_shared = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'templated')
-    rag_prompt, rag_shared = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'rag')
+    raw_prompt, raw_shared, raw_meta = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'raw')
+    templated_prompt, templated_shared, templated_meta = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'templated')
+    rag_prompt, rag_shared, rag_meta = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'rag')
     assert raw_prompt == base_prompt
     assert raw_shared == ''
     assert templated_prompt.startswith(templated_shared)
@@ -65,3 +65,24 @@ def test_fake_backend_capabilities_stay_external_kv():
     backend = FakeBackend()
     assert backend.supports_external_kv is True
     assert backend.supports_native_prefix_caching is False
+
+
+def test_semantic_prompt_mode_rotates_paraphrased_scaffolds_and_sets_equivalence_key():
+    base_prompt = 'Instruction: do the thing\nAssistant response:'
+    p0, s0, m0 = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'semantic', request_index=0)
+    p1, s1, m1 = _apply_prompt_mode('dolly', 'instruction', base_prompt, 'semantic', request_index=1)
+    assert p0.startswith(s0)
+    assert p1.startswith(s1)
+    assert s0 != s1
+    assert m0['semantic_equivalence_key'] == m1['semantic_equivalence_key']
+    assert m0['paraphrase_variant'] != m1['paraphrase_variant']
+
+
+def test_synthetic_semantic_paraphrase_variant_rotates_without_exact_shared_prefix():
+    reqs = make_synthetic_workload('semantic_paraphrase', 8, seed=11)
+    assert len(reqs) == 8
+    variants = {r.metadata.get('paraphrase_variant') for r in reqs if r.metadata}
+    keys = {r.metadata.get('semantic_equivalence_key') for r in reqs if r.metadata}
+    assert len(variants) > 1
+    assert keys == {'synthetic_semantic_classification'}
+    assert all(r.metadata and r.metadata.get('prompt_mode') == 'semantic' for r in reqs)

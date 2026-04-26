@@ -21,6 +21,7 @@ from proactive_kv_cache.engines import (
     NoCacheEngine,
     ReactivePrefixCacheEngine,
     ShadowKVEngine,
+    ShadowKVPlusEngine,
     StrictReactivePrefixCacheEngine,
     maybe_shutdown,
     summarize_engine,
@@ -159,7 +160,7 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
     token_benefit_ms = calibration['ms_per_token']
     speculation_penalty_ms = calibration['fixed_prefill_overhead_ms']
     kv_mb_per_token = calibration['kv_mb_per_token']
-    scaffold_mode = prompt_mode in ('templated', 'rag')
+    scaffold_mode = prompt_mode in ('templated', 'rag', 'semantic')
     if backend.device.startswith('cuda'):
         policy_kwargs = {
             'min_frequency': 0.16,
@@ -183,7 +184,7 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
             'global_frequency_weight': 0.22,
             'reuse_discount': 0.95,
             'min_utility_score': 0.02,
-            'reuse_horizon_s': 1.35 if prompt_mode == 'rag' else (1.05 if scaffold_mode else 0.75),
+            'reuse_horizon_s': 1.35 if prompt_mode == 'rag' else (1.20 if prompt_mode == 'semantic' else (1.05 if scaffold_mode else 0.75)),
             'bootstrap_horizon_requests': 0.90 if scaffold_mode else 0.45,
             'branching_weight': 0.14 if scaffold_mode else 0.10,
         }
@@ -193,8 +194,8 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
             policy_kwargs['min_recent_support'] = 0.01
             policy_kwargs['min_expected_net_ms'] = max(0.25, token_benefit_ms * 2.5)
             policy_kwargs['benefit_cost_ratio'] = 0.85
-            policy_kwargs['reuse_horizon_s'] = 1.60 if prompt_mode == 'rag' else 1.40
-            policy_kwargs['bootstrap_horizon_requests'] = 1.25 if prompt_mode == 'rag' else 1.10
+            policy_kwargs['reuse_horizon_s'] = 1.60 if prompt_mode == 'rag' else (1.50 if prompt_mode == 'semantic' else 1.40)
+            policy_kwargs['bootstrap_horizon_requests'] = 1.25 if prompt_mode == 'rag' else (1.20 if prompt_mode == 'semantic' else 1.10)
             policy_kwargs['preferred_prefix_len'] = 80
             policy_kwargs['max_prefix_len'] = 224
             policy_kwargs['max_admissions_per_idle'] = 4
@@ -221,7 +222,7 @@ def _build_shadowkv_policy_kwargs(backend, prompt_mode: str = 'raw') -> tuple[di
         'global_frequency_weight': 0.24,
         'reuse_discount': 0.92,
         'min_utility_score': 0.04,
-        'reuse_horizon_s': 1.10 if prompt_mode == 'rag' else (0.90 if scaffold_mode else 0.60),
+        'reuse_horizon_s': 1.10 if prompt_mode == 'rag' else (1.00 if prompt_mode == 'semantic' else (0.90 if scaffold_mode else 0.60)),
         'bootstrap_horizon_requests': 0.80 if scaffold_mode else 0.35,
         'branching_weight': 0.14 if scaffold_mode else 0.10,
     }
@@ -261,7 +262,13 @@ def list_engine_names(args) -> list[str]:
         ]
     )
     if args.include_experimental:
-        names.extend(['frequency_speculative', 'shadow_kv'])
+        names.extend(['frequency_speculative', 'shadow_kv', 'shadow_kv_plus', 'shadow_kv_plus_best_latency', 'shadow_kv_plus_raw_observer'])
+    if getattr(args, 'include_semantic_ablations', False):
+        names.extend([
+            'shadow_kv_plus_scaffold_only',
+            'shadow_kv_plus_early_layer',
+            'shadow_kv_plus_logit_guard',
+        ])
     return names
 
 
@@ -283,7 +290,7 @@ def build_engine(args, backend, engine_name: str):
             speculative_k=args.speculative_k,
             idle_threshold_ms=args.idle_threshold_ms,
         )
-    if engine_name == 'shadow_kv':
+    if engine_name in ('shadow_kv', 'shadow_kv_plus', 'shadow_kv_plus_best_latency', 'shadow_kv_plus_raw_observer', 'shadow_kv_plus_scaffold_only', 'shadow_kv_plus_early_layer', 'shadow_kv_plus_logit_guard'):
         calibration_backend = load_backend_from_args(args)
         try:
             shadowkv_policy_kwargs, shadowkv_policy_calibration = _build_shadowkv_policy_kwargs(calibration_backend, prompt_mode=args.resolved_prompt_mode)
@@ -291,13 +298,40 @@ def build_engine(args, backend, engine_name: str):
             del calibration_backend
         args.shadowkv_policy_calibration = shadowkv_policy_calibration
         args.shadowkv_policy_kwargs = shadowkv_policy_kwargs
-        return ShadowKVEngine(
+        if engine_name == 'shadow_kv':
+            return ShadowKVEngine(
+                backend=backend,
+                max_memory_mb=args.max_memory_mb,
+                speculative_k=args.speculative_k,
+                idle_threshold_ms=args.idle_threshold_ms,
+                policy=CostAwareSlackPolicy(**shadowkv_policy_kwargs),
+                enable_gpu_tier=args.device.startswith('cuda'),
+            )
+        ablation_mode = {
+            'shadow_kv_plus': 'safe',
+            'shadow_kv_plus_best_latency': 'best_latency',
+            'shadow_kv_plus_raw_observer': 'raw_observer',
+            'shadow_kv_plus_scaffold_only': 'scaffold_only',
+            'shadow_kv_plus_early_layer': 'early_layer',
+            'shadow_kv_plus_logit_guard': 'logit_guard',
+        }[engine_name]
+        raw_strategy = {
+            'shadow_kv_plus': 'strict_utility_gate',
+            'shadow_kv_plus_best_latency': 'best_latency',
+            'shadow_kv_plus_raw_observer': 'raw_observer',
+        }.get(engine_name)
+        return ShadowKVPlusEngine(
             backend=backend,
             max_memory_mb=args.max_memory_mb,
             speculative_k=args.speculative_k,
             idle_threshold_ms=args.idle_threshold_ms,
             policy=CostAwareSlackPolicy(**shadowkv_policy_kwargs),
             enable_gpu_tier=args.device.startswith('cuda'),
+            semantic_ablation_mode=ablation_mode,
+            raw_strategy=raw_strategy,
+            early_layer_reuse_ratio=args.early_layer_reuse_ratio,
+            logit_guard_threshold=args.logit_guard_threshold,
+            allow_approximate_semantic_reuse=args.allow_unsafe_semantic_kv_reuse,
         )
     raise ValueError(f'Unknown engine name: {engine_name}')
 
@@ -312,6 +346,11 @@ def main() -> None:
     parser.add_argument('--trust_remote_code', action='store_true')
     parser.add_argument('--disable_native_prefix_caching', action='store_true')
     parser.add_argument('--include_experimental', action='store_true')
+    parser.add_argument('--include_semantic_ablations', action='store_true', help='Add scaffold-only, early-layer, and logit-guarded ShadowKV++ ablation engines.')
+    parser.add_argument('--enable_policy_trace', action='store_true', help='Write per-request policy_trace.jsonl. Disabled by default for performance benchmarking.')
+    parser.add_argument('--allow_unsafe_semantic_kv_reuse', action='store_true', help='Allow unguarded approximate semantic KV reuse. Intended only for fake/controlled ablations.')
+    parser.add_argument('--early_layer_reuse_ratio', type=float, default=0.35, help='Fraction of semantic KV prefix reused in early-layer ablation.')
+    parser.add_argument('--logit_guard_threshold', type=float, default=0.08, help='Maximum TV distance for logit-guard semantic reuse.')
     parser.add_argument('--workload', choices=['synthetic', 'public_dataset'], default='synthetic')
     parser.add_argument('--variant', choices=sorted(SYNTHETIC_VARIANTS.keys()), default='high_skew')
     parser.add_argument('--dataset', choices=list_datasets(), default='daily_dialog')
@@ -338,6 +377,7 @@ def main() -> None:
     engine_names = list_engine_names(args)
     summary = {}
     capabilities = None
+    policy_trace_rows = []
 
     for engine_name in engine_names:
         set_seed(args.seed)
@@ -348,6 +388,7 @@ def main() -> None:
                 'supports_native_prefix_caching': getattr(backend, 'supports_native_prefix_caching', False),
             }
         engine = build_engine(args, backend, engine_name)
+        engine.trace_enabled = bool(args.enable_policy_trace)
         shared_prefix_token_cache = {}
         for idx, req in enumerate(requests):
             maybe_sleep(idx, requests, args.simulate_arrivals, args.max_arrival_sleep_ms)
@@ -364,6 +405,20 @@ def main() -> None:
             engine.serve_tokens(req.request_id, tokens, metadata=metadata)
         maybe_shutdown(engine)
         summary[engine.name] = summarize_engine(engine)
+        if args.enable_policy_trace:
+            for row in getattr(engine, 'policy_trace_rows', []):
+                traced = dict(row)
+                traced.setdefault('engine', engine.name)
+                traced['model'] = resolve_model(args.model)
+                traced['backend'] = args.backend
+                traced['device'] = args.device
+                traced['dtype'] = args.dtype
+                traced['workload'] = args.workload
+                traced['dataset'] = args.dataset if args.workload == 'public_dataset' else None
+                traced['variant'] = args.variant if args.workload == 'synthetic' else None
+                traced['prompt_mode'] = args.resolved_prompt_mode
+                traced['seed'] = args.seed
+                policy_trace_rows.append(traced)
         del engine
         del backend
 
@@ -387,8 +442,24 @@ def main() -> None:
     name = f"benchmark_{args.backend}_{model_slug}_{args.workload}_{workload_slug}_{args.device.replace(':', '_')}.json"
     out_file = output_dir / name
     out_file.write_text(json.dumps(summary, indent=2))
+    if args.enable_policy_trace:
+        trace_file = output_dir / 'policy_trace.jsonl'
+        with trace_file.open('w', encoding='utf-8') as fh:
+            for row in policy_trace_rows:
+                fh.write(json.dumps(row, sort_keys=True) + '\n')
+        summary['config']['policy_trace_file'] = str(trace_file)
+        summary['config']['policy_trace_rows'] = len(policy_trace_rows)
+        out_file.write_text(json.dumps(summary, indent=2))
+    else:
+        summary['config']['policy_trace_file'] = None
+        summary['config']['policy_trace_rows'] = 0
+        out_file.write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
     print(f'Saved to {out_file}')
+    if args.enable_policy_trace:
+        print(f'Saved policy trace to {trace_file} ({len(policy_trace_rows)} rows)')
+    else:
+        print('Policy trace disabled. Re-run with --enable_policy_trace to emit policy_trace.jsonl.')
 
 
 if __name__ == '__main__':

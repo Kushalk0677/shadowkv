@@ -43,6 +43,22 @@ RAG_QUESTIONS = [
     'What are the mandatory controls for a regulated customer flow?',
 ]
 
+SEMANTIC_PARAPHRASE_PREFIXES = [
+    'System: Classify the following item by dominant topic. Return one short label.\nItem:\n',
+    'Classification task: identify the best category for this text. Reply with the label only.\nText:\n',
+    'Decision brief: read the item and choose its strongest topic or intent category.\nInput:\n',
+    'Task: assign the most likely category to the content below. Keep the answer compact.\nRequest body:\n',
+]
+
+SEMANTIC_PARAPHRASE_ITEMS = [
+    'The central bank kept rates unchanged after inflation cooled for the third month.',
+    'A new battery design helped the electric vehicle travel farther on a single charge.',
+    'The football club signed a young striker before the transfer window closed.',
+    'Researchers released a compact language model for document summarization.',
+    'Shares rose after the company reported stronger quarterly earnings.',
+    'A hospital trial showed improved recovery times for the new treatment pathway.',
+]
+
 CUSTOMER_CASES = [
     'Customer moved to a new address and wants to raise the transfer limit immediately.',
     'Customer reported a suspicious login and wants the account unlocked today.',
@@ -70,6 +86,7 @@ class SyntheticWorkloadGenerator:
         hot_suffix_bias: float = 0.0,
         long_prefix_bias: float = 0.0,
         rag_mode: bool = False,
+        semantic_mode: bool = False,
     ):
         self.alpha = alpha
         self.mean_inter_arrival_ms = mean_inter_arrival_ms
@@ -78,6 +95,7 @@ class SyntheticWorkloadGenerator:
         self.hot_suffix_bias = hot_suffix_bias
         self.long_prefix_bias = long_prefix_bias
         self.rag_mode = rag_mode
+        self.semantic_mode = semantic_mode
         self.rng = np.random.default_rng(seed)
 
         ranks = np.arange(1, len(SYSTEM_PROMPTS) + 1)
@@ -120,6 +138,20 @@ class SyntheticWorkloadGenerator:
         return rows
 
     def _sample_prompt(self, request_id: int) -> Tuple[str, Dict[str, object]]:
+        if self.semantic_mode:
+            variant = request_id % len(SEMANTIC_PARAPHRASE_PREFIXES)
+            item = str(self.rng.choice(SEMANTIC_PARAPHRASE_ITEMS))
+            prompt = f"{SEMANTIC_PARAPHRASE_PREFIXES[variant]}{item}\nCategory:"
+            return prompt, {
+                'source_workload': 'synthetic',
+                'variant': 'semantic_paraphrase',
+                'prompt_mode': 'semantic',
+                'shared_prefix_text': SEMANTIC_PARAPHRASE_PREFIXES[variant],
+                'semantic_equivalence_key': 'synthetic_semantic_classification',
+                'semantic_family': 'classification',
+                'paraphrase_variant': variant,
+                'semantic_variant_count': len(SEMANTIC_PARAPHRASE_PREFIXES),
+            }
         if self.long_prefix_bias > 0 or self.rag_mode:
             t = int(self.rng.choice(len(LONG_SHARED_TEMPLATES), p=self.long_template_probs))
             case = str(self.rng.choice(CUSTOMER_CASES))
@@ -168,6 +200,7 @@ SYNTHETIC_VARIANTS = {
     'mixed': dict(alpha=1.0, mean_inter_arrival_ms=130.0, burst_probability=0.15, hot_suffix_bias=0.15),
     'long_shared_prefix': dict(alpha=1.6, mean_inter_arrival_ms=180.0, burst_probability=0.15, hot_suffix_bias=0.2, long_prefix_bias=1.0),
     'rag_long_context': dict(alpha=1.7, mean_inter_arrival_ms=200.0, burst_probability=0.10, hot_suffix_bias=0.1, long_prefix_bias=1.2, rag_mode=True),
+    'semantic_paraphrase': dict(alpha=1.0, mean_inter_arrival_ms=120.0, burst_probability=0.0, hot_suffix_bias=0.0, semantic_mode=True),
 }
 
 

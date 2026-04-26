@@ -60,7 +60,7 @@ DATASET_REGISTRY = {
     },
 }
 
-PROMPT_MODES = ('raw', 'templated', 'rag')
+PROMPT_MODES = ('raw', 'templated', 'rag', 'semantic')
 
 SHARED_TEMPLATES = {
     'dialogue_summary': (
@@ -236,6 +236,68 @@ RAG_SHARED_TEMPLATES = {
 }
 
 
+SEMANTIC_PARAPHRASE_TEMPLATES = {
+    'dialogue_summary': (
+        'System: Condense the following conversation into a factual one or two sentence recap. Preserve speaker intent and outcome. Dataset family: {dataset_label}.\nConversation payload:\n',
+        'Instruction: Read the dialogue and write a compact neutral summary. Keep only the goal, action, and resolution. Dataset family: {dataset_label}.\nDialogue input:\n',
+        'Role: Dialogue summarizer. Ignore greetings and filler, then summarize the exchange faithfully in brief. Dataset family: {dataset_label}.\nTranscript:\n',
+        'Task brief: Create a concise summary of this multi-turn dialogue without adding facts. Dataset family: {dataset_label}.\nRequest body:\n',
+    ),
+    'instruction': (
+        'System: Follow the user instruction and provide a concise helpful answer based only on supplied context. Dataset family: {dataset_label}.\nRequest:\n',
+        'Instruction-following task: identify what is being asked and answer directly, avoiding invented details. Dataset family: {dataset_label}.\nPayload:\n',
+        'Assistant policy: be useful, brief, and faithful to the instruction and context below. Dataset family: {dataset_label}.\nInput:\n',
+        'Task: produce a short operationally useful response to the following instruction. Dataset family: {dataset_label}.\nUser material:\n',
+    ),
+    'alpaca_eval': (
+        'System: Answer the following general-assistant instruction clearly and without unnecessary commentary. Dataset family: {dataset_label}.\nInstruction payload:\n',
+        'Task: read the instruction and return a strong concise assistant response. Dataset family: {dataset_label}.\nPrompt body:\n',
+        'Assistant brief: respond directly to the request below with a neutral tone. Dataset family: {dataset_label}.\nUser instruction:\n',
+        'Evaluation scaffold: interpret the task, answer clearly, and avoid filler. Dataset family: {dataset_label}.\nInput request:\n',
+    ),
+    'oasst': (
+        'System: Continue the conversation helpfully and safely while preserving the user intent and language. Dataset family: {dataset_label}.\nConversation item:\n',
+        'Assistant continuation task: respond naturally, safely, and concisely to the message below. Dataset family: {dataset_label}.\nMessage payload:\n',
+        'Safety-aware chat brief: infer the next helpful assistant turn from the supplied text. Dataset family: {dataset_label}.\nConversation payload:\n',
+        'Task: produce a safe compact assistant reply that follows the conversation context. Dataset family: {dataset_label}.\nInput:\n',
+    ),
+    'chat_messages': (
+        'System: Read the chat transcript and produce the next helpful assistant turn. Dataset family: {dataset_label}.\nTranscript payload:\n',
+        'Chat continuation instruction: preserve topic continuity and answer the last user need. Dataset family: {dataset_label}.\nConversation:\n',
+        'Assistant role: continue this dialogue naturally, grounded only in the provided messages. Dataset family: {dataset_label}.\nMessages:\n',
+        'Task brief: infer and write the next concise helpful chat response. Dataset family: {dataset_label}.\nDialogue:\n',
+    ),
+    'summarization': (
+        'System: Summarize the document in one factual sentence focused on the main event. Dataset family: {dataset_label}.\nDocument payload:\n',
+        'News summary task: extract the central event and produce a compact factual summary. Dataset family: {dataset_label}.\nArticle:\n',
+        'Editorial brief: preserve core facts, avoid speculation, and write a short summary. Dataset family: {dataset_label}.\nSource text:\n',
+        'Task: read the article and return a concise factual synopsis. Dataset family: {dataset_label}.\nInput document:\n',
+    ),
+    'classification': (
+        'System: Classify the item by its dominant intent or topic and output the most likely label. Dataset family: {dataset_label}.\nItem payload:\n',
+        'Classification task: identify the category that best matches the following text. Dataset family: {dataset_label}.\nText:\n',
+        'Decision brief: read the item, ignore incidental wording, and emit one category. Dataset family: {dataset_label}.\nInput item:\n',
+        'Task: choose the strongest topic or intent label for the text below. Dataset family: {dataset_label}.\nRequest body:\n',
+    ),
+    'generic': (
+        'System: Answer the following request concisely and faithfully. Dataset family: {dataset_label}.\nPayload:\n',
+        'Assistant task: read the request and respond directly. Dataset family: {dataset_label}.\nInput:\n',
+        'Instruction: provide a brief grounded answer to the material below. Dataset family: {dataset_label}.\nRequest:\n',
+        'Task brief: produce a useful concise response. Dataset family: {dataset_label}.\nBody:\n',
+    ),
+}
+
+SEMANTIC_EQUIVALENCE_KEYS = {
+    'dialogue_summary': 'semantic_task_dialogue_summary',
+    'instruction': 'semantic_task_instruction_following',
+    'alpaca_eval': 'semantic_task_general_assistant',
+    'oasst': 'semantic_task_safe_chat_continuation',
+    'chat_messages': 'semantic_task_chat_continuation',
+    'summarization': 'semantic_task_document_summary',
+    'classification': 'semantic_task_classification',
+    'generic': 'semantic_task_generic_assistant',
+}
+
 def list_datasets() -> List[str]:
     return sorted(DATASET_REGISTRY.keys())
 
@@ -406,14 +468,27 @@ def _resolve_prompt_mode(prompt_mode: str) -> str:
     return prompt_mode
 
 
-def _apply_prompt_mode(dataset_name: str, dataset_type: str, base_prompt: str, prompt_mode: str) -> Tuple[str, str]:
+def _apply_prompt_mode(dataset_name: str, dataset_type: str, base_prompt: str, prompt_mode: str, request_index: int = 0) -> Tuple[str, str, Dict[str, object]]:
     prompt_mode = _resolve_prompt_mode(prompt_mode)
     if prompt_mode == 'raw':
-        return base_prompt, ''
-    template_bank = RAG_SHARED_TEMPLATES if prompt_mode == 'rag' else SHARED_TEMPLATES
+        return base_prompt, '', {}
     dataset_label = dataset_name.replace('_', ' ')
+    if prompt_mode == 'semantic':
+        variants = SEMANTIC_PARAPHRASE_TEMPLATES.get(dataset_type, SEMANTIC_PARAPHRASE_TEMPLATES['generic'])
+        variant_index = int(request_index) % len(variants)
+        shared_prefix = variants[variant_index].format(dataset_label=dataset_label)
+        semantic_key = f"{SEMANTIC_EQUIVALENCE_KEYS.get(dataset_type, SEMANTIC_EQUIVALENCE_KEYS['generic'])}:{dataset_name}"
+        metadata = {
+            'semantic_equivalence_key': semantic_key,
+            'semantic_family': dataset_type,
+            'paraphrase_variant': variant_index,
+            'semantic_variant_count': len(variants),
+            'semantic_anchor_text': SEMANTIC_PARAPHRASE_TEMPLATES.get(dataset_type, SEMANTIC_PARAPHRASE_TEMPLATES['generic'])[0].format(dataset_label=dataset_label),
+        }
+        return f'{shared_prefix}{base_prompt}', shared_prefix, metadata
+    template_bank = RAG_SHARED_TEMPLATES if prompt_mode == 'rag' else SHARED_TEMPLATES
     shared_prefix = template_bank.get(dataset_type, template_bank['generic']).format(dataset_label=dataset_label)
-    return f'{shared_prefix}{base_prompt}', shared_prefix
+    return f'{shared_prefix}{base_prompt}', shared_prefix, {}
 
 
 def load_public_text_rows(dataset_name: str, split: str, limit: int, seed: int = 42, prompt_mode: str = 'raw') -> List[Dict]:
@@ -448,15 +523,17 @@ def load_public_text_rows(dataset_name: str, split: str, limit: int, seed: int =
         base_prompt = _row_to_prompt(dataset_type, ex)
         if not base_prompt:
             continue
-        prompt, shared_prefix_text = _apply_prompt_mode(dataset_name, dataset_type, base_prompt, resolved_prompt_mode)
-        rows.append({
+        prompt, shared_prefix_text, mode_metadata = _apply_prompt_mode(dataset_name, dataset_type, base_prompt, resolved_prompt_mode, request_index=len(rows))
+        row = {
             'prompt': prompt,
             'source_dataset': dataset_name,
             'hf_name': hf_name,
             'dataset_type': dataset_type,
             'prompt_mode': resolved_prompt_mode,
             'shared_prefix_text': shared_prefix_text,
-        })
+        }
+        row.update(mode_metadata)
+        rows.append(row)
         if len(rows) >= limit:
             break
 

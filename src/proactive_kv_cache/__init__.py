@@ -5,6 +5,7 @@ from .engines import (
     NoCacheEngine,
     ReactivePrefixCacheEngine,
     ShadowKVEngine,
+    ShadowKVPlusEngine,
     StrictReactivePrefixCacheEngine,
 )
 from .models import load_backend, supports_gpu
@@ -17,6 +18,7 @@ __all__ = [
     'GreedyPrefixCacheEngine',
     'FrequencySpeculativeEngine',
     'ShadowKVEngine',
+    'ShadowKVPlusEngine',
     'load_backend',
     'supports_gpu',
 ]

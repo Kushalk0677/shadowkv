@@ -252,6 +252,8 @@ class TieredStateBank:
             self.entries[prefix_tokens] = entry
             self._trie_insert_unlocked(prefix_tokens)
             self.current_memory_bytes += memory_bytes
+            if tier == 'gpu':
+                self.metrics['promotions'] += 1
             return True
 
     def promote(self, prefix_tokens: Tuple[int, ...], new_cache: Any, new_memory_bytes: int, new_tier: str = 'gpu') -> bool:

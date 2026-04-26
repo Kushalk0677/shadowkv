@@ -1,47 +1,3 @@
-# ShadowKV / ShadowKV++ Research Repository
-
-This is now the integrated full research-grade repository. It preserves the original benchmark harness and result archives, while adding **ShadowKV++** as a policy-driven, semantic-signal, fine-grained, waste-aware KV reuse engine.
-
-## What is new in ShadowKV++
-
-ShadowKV++ changes the research framing from "a cache that reacts" to "an inference controller that decides."
-
-New integrated modules:
-
-- `src/proactive_kv_cache/controller.py` — pre-execution adaptive reuse controller.
-- `src/proactive_kv_cache/semantic.py` — lightweight semantic/structural KV prefix index.
-- `src/proactive_kv_cache/policy_learning.py` — offline learner for deployment thresholds from benchmark logs.
-- `ShadowKVPlusEngine` in `src/proactive_kv_cache/engines.py`.
-- `experiments/analyze_shadowkv_results.py` — parses JSON files and result zips into CSV, Markdown, and learned policy JSON.
-- `docs/shadowkv_plus_research_design.md` — paper-grade research design and claim boundaries.
-
-Important correctness boundary: real backends only perform exact-prefix KV reuse. Approximate semantic partial reuse is treated as simulator/research-mode unless a backend-specific correctness validation is added.
-
-## Fast validation
-
-```bash
-python -m pytest -q
-python experiments/run_benchmark.py --backend fake --workload synthetic --variant high_skew --n_requests 40 --include_experimental --disable_arrival_simulation --output_dir results/
-python experiments/analyze_shadowkv_results.py results/
-```
-
-## Research-grade comparison command
-
-```bash
-python experiments/run_benchmark.py \
-  --backend hf \
-  --model distilgpt2 \
-  --device cpu \
-  --workload public_dataset \
-  --dataset samsum \
-  --prompt_mode templated \
-  --n_requests 64 \
-  --include_experimental \
-  --output_dir results/
-```
-
----
-
 # ShadowKV: Tiered Prefix Caching for LLM Serving
 
 Research code for testing adaptive prefix reuse in LLM serving. The repository includes CPU-friendly baselines, public dataset loaders, benchmark scripts, and basic diagnostics.
@@ -162,36 +118,33 @@ python experiments/run_benchmark.py \
   --output_dir results/
 ```
 
-## Semantic/paraphrase novelty workload
+## ShadowKV++ rewrite
 
-The repository now supports a fourth prompt mode:
+This repo now includes `shadow_kv_plus`, a new experimental engine that reframes ShadowKV as a policy-driven inference controller rather than a cache mechanism.
+
+### What changed
+
+- **Adaptive decision controller**: `src/proactive_kv_cache/controller.py` computes a per-request reuse plan before execution. It scores exact reuse, semantic partial reuse, and bypass using a net-utility objective: expected benefit minus expected cost minus expected waste.
+- **Semantic KV index**: `src/proactive_kv_cache/semantic.py` adds a dependency-free token sketch index. It is used as a lightweight semantic signal for retrieval and policy decisions.
+- **Fine-grained reuse model**: `shadow_kv_plus` records a logical layer-reuse ratio for each admitted plan. Exact-prefix KV reuse remains correctness-preserving on real backends; approximate semantic partial reuse is only enabled for the `FakeBackend` simulator.
+- **Waste-aware behaviour**: bypass decisions no longer pay reactive store cost on the same request. Long explicit scaffolds are admitted earlier to reduce cold-start misses.
+- **Visible diagnostics**: JSON summaries now preserve experimental controller metrics such as `policy_plans_total`, `policy_exact_total`, `policy_bypass_total`, `policy_net_utility_ms`, `semantic_queries_total`, and `layer_reuse_events`.
+
+### How to run
 
 ```bash
---prompt_mode semantic
-```
-
-This mode rotates paraphrased scaffolds for the same underlying task family. It is
-intended to evaluate whether ShadowKV++ can detect semantic reuse opportunities
-that exact-prefix caches cannot exploit.
-
-For controlled local ablation without downloading datasets:
-
-```bash
-python experiments/run_benchmark.py \
+PYTHONPATH=src python experiments/run_benchmark.py \
   --backend fake \
   --workload synthetic \
-  --variant semantic_paraphrase \
-  --n_requests 32 \
+  --variant long_shared_prefix \
+  --n_requests 40 \
   --include_experimental \
-  --output_dir results/semantic_fake_smoke
+  --disable_arrival_simulation \
+  --output_dir results
 ```
 
-For HF public-dataset novelty evaluation:
+`--include_experimental` now runs `frequency_speculative`, `shadow_kv`, and `shadow_kv_plus`.
 
-```bash
-python experiments/run_semantic_novelty_matrix.py
-```
+### Correctness note
 
-On real HF backends, semantic opportunities are reported but approximate KV reuse
-is blocked by default for correctness. Inspect `semantic_opportunity_*` and
-`semantic_blocked_by_backend_total` metrics.
+For Hugging Face/vLLM-style real backends, ShadowKV++ only admits real KV reuse on exact-prefix matches. Semantic retrieval is used for policy and research diagnostics unless the backend is the simulator. This avoids silently reusing invalid KV states for semantically similar but token-different prompts.
