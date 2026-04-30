@@ -34,3 +34,9 @@ What not to call literature-accurate:
 Separate adapter:
 - `run_lmcache.py` launches or attaches to a real LMCache-backed vLLM or
   SGLang server through its OpenAI-compatible API path.
+- `run_runtime_cache_baseline.py --baseline lmcache` is the unified
+  literature-accurate runner for this repo's baseline table.
+- `run_runtime_cache_baseline.py --baseline lmcache_shadowkv_plus` adds the
+  ShadowKV++ admission controller and uses vLLM's `reset_prefix_cache` endpoint
+  with `reset_external=true` or SGLang's `/flush_cache` endpoint to
+  conservatively enforce bypass decisions.

@@ -20,6 +20,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from proactive_kv_cache.datasets import list_datasets, list_prompt_modes
+from proactive_kv_cache.controller import AdaptiveReuseController, ReusePlan
 from proactive_kv_cache.metrics import summarize_run
 from proactive_kv_cache.utils import set_seed
 from proactive_kv_cache.workload import SYNTHETIC_VARIANTS, Request, make_public_dataset_workload, make_synthetic_workload
@@ -207,6 +208,17 @@ class OpenAICompatClient:
             raw = response.read().decode("utf-8")
         return json.loads(raw)
 
+    def post_empty(self, path: str, timeout_s: float = 30.0) -> int:
+        request = urllib.request.Request(
+            self.api_base + path,
+            data=b"",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            response.read()
+            return int(response.status)
+
     def invoke(
         self,
         *,
@@ -357,6 +369,50 @@ def build_sglang_hicache_command(args: argparse.Namespace) -> List[str]:
     return cmd
 
 
+def build_vllm_apc_command(args: argparse.Namespace) -> List[str]:
+    cmd = [
+        "vllm",
+        "serve",
+        resolve_model(args.model) or args.model,
+        "--host",
+        args.host,
+        "--port",
+        str(args.port),
+        "--enable-prefix-caching",
+    ]
+    if getattr(args, "dtype", None):
+        cmd.extend(["--dtype", str(args.dtype)])
+    if getattr(args, "tp", 1) and args.tp > 1:
+        cmd.extend(["--tensor-parallel-size", str(args.tp)])
+    for extra in args.server_extra_arg:
+        cmd.append(extra)
+    return cmd
+
+
+def build_sglang_radix_attention_command(args: argparse.Namespace) -> List[str]:
+    cmd = [
+        args.python_executable,
+        "-m",
+        "sglang.launch_server",
+        "--model-path",
+        resolve_model(args.model) or args.model,
+        "--host",
+        args.host,
+        "--port",
+        str(args.port),
+        "--enable-metrics",
+    ]
+    if args.tp and args.tp > 1:
+        cmd.extend(["--tp", str(args.tp)])
+    if getattr(args, "attention_backend", None):
+        cmd.extend(["--attention-backend", str(args.attention_backend)])
+    for extra in args.server_extra_arg:
+        if extra == "--disable-radix-cache":
+            raise ValueError("SGLang RadixAttention baseline must not pass --disable-radix-cache")
+        cmd.append(extra)
+    return cmd
+
+
 def build_lmcache_command(args: argparse.Namespace) -> tuple[List[str], Dict[str, str]]:
     env_updates: Dict[str, str] = {}
     if args.lmcache_chunk_size:
@@ -413,6 +469,100 @@ def build_lmcache_command(args: argparse.Namespace) -> tuple[List[str], Dict[str
     for extra in args.server_extra_arg:
         cmd.append(extra)
     return cmd, env_updates
+
+
+class ExternalAdmissionController:
+    """Conservative ShadowKV++ admission wrapper for external runtimes.
+
+    External runtimes own their KV cache internals. To keep this literature
+    adapter honest, controller-denied requests are enforced by resetting the
+    runtime prefix/radix cache before the request. This is conservative and may
+    understate performance versus a hypothetical native per-request admission
+    hook, but it avoids reporting simulated admission as a runtime result.
+    """
+
+    def __init__(self, model: str, runtime: str, min_match_length: int = 8) -> None:
+        from proactive_kv_cache.cache import TieredStateBank
+
+        self.runtime = runtime
+        self.bank = TieredStateBank(max_memory_bytes=1024 * 1024, min_match_length=min_match_length)
+        self.controller = AdaptiveReuseController()
+        self._tokenizer = None
+        self._token_to_id: Dict[str, int] = {}
+        try:
+            from transformers import AutoTokenizer
+
+            self._tokenizer = AutoTokenizer.from_pretrained(model)
+        except Exception:
+            self._tokenizer = None
+
+    def tokenize(self, text: str) -> tuple[int, ...]:
+        if self._tokenizer is not None:
+            return tuple(int(x) for x in self._tokenizer(text, truncation=True)["input_ids"])
+        ids: List[int] = []
+        for token in text.strip().split():
+            if token not in self._token_to_id:
+                self._token_to_id[token] = len(self._token_to_id) + 1
+            ids.append(self._token_to_id[token])
+        return tuple(ids)
+
+    def _shared_prefix_hint(self, tokens: tuple[int, ...], metadata: Dict[str, Any] | None) -> int | None:
+        if not metadata:
+            return None
+        hint = metadata.get("shared_prefix_hint_tokens")
+        if hint is None:
+            return None
+        try:
+            return min(int(hint), len(tokens))
+        except Exception:
+            return None
+
+    def plan(self, prompt: str, metadata: Dict[str, Any] | None = None) -> tuple[ReusePlan, tuple[int, ...]]:
+        tokens = self.tokenize(prompt)
+        hint = self._shared_prefix_hint(tokens, metadata)
+        tracked = [hint] if hint and hint >= self.bank.min_match_length else self.bank.default_prefix_lengths(tokens)
+        self.bank.observe_query(tokens, tracked_prefix_lengths=tracked, reusable_prefix_limit=hint)
+        match = self.bank.peek_match(tokens)
+        exact_len = int(match[2]) if match is not None else 0
+        sample = max(min(len(tokens), 32), 1)
+        plan = self.controller.plan(
+            tokens=tokens,
+            exact_match_len=exact_len,
+            semantic_similarity=0.0,
+            semantic_prefix_len=0,
+            shared_prefix_hint=hint,
+            full_ms_per_token=max(sample / sample, 0.05),
+            reuse_overhead_ms=1.0,
+            metadata=metadata,
+        )
+        return plan, tokens
+
+    def record_after_request(self, tokens: tuple[int, ...], plan: ReusePlan, metadata: Dict[str, Any] | None = None) -> bool:
+        if plan.strategy == "bypass":
+            self.controller.update_feedback(hit=False, wasted_ratio=0.0)
+            return False
+        hint = self._shared_prefix_hint(tokens, metadata)
+        prefix_len = hint if hint and hint >= self.bank.min_match_length else min(len(tokens), max(self.bank.min_match_length, min(64, len(tokens))))
+        prefix = tokens[:prefix_len]
+        stored = self.bank.store(prefix, None, generation_cost_ms=0.0, memory_bytes=1, is_speculative=False, tier="external")
+        self.controller.update_feedback(hit=plan.strategy == "exact", wasted_ratio=0.0)
+        return stored
+
+
+def reset_runtime_cache(client: OpenAICompatClient, runtime: str, reset_external: bool = False) -> bool:
+    candidates = []
+    if runtime == "sglang":
+        candidates.append("/flush_cache?timeout=30")
+    else:
+        suffix = "?reset_external=true" if reset_external else ""
+        candidates.append(f"/reset_prefix_cache{suffix}")
+    for path in candidates:
+        try:
+            client.post_empty(path, timeout_s=30.0)
+            return True
+        except Exception:
+            continue
+    return False
 
 
 def load_trace_requests(trace_path: str) -> List[Request]:

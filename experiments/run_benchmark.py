@@ -15,11 +15,13 @@ import time
 
 from proactive_kv_cache.datasets import list_datasets, list_prompt_modes
 from proactive_kv_cache.engines import (
+    AdmissionControlledRuntimeCacheEngine,
     FrequencySpeculativeEngine,
     GreedyPrefixCacheEngine,
     NativePrefixCachingEngine,
     NoCacheEngine,
     ReactivePrefixCacheEngine,
+    RuntimeNativeCacheEngine,
     ShadowKVEngine,
     ShadowKVPlusEngine,
     StrictReactivePrefixCacheEngine,
@@ -59,7 +61,32 @@ ALL_ENGINE_NAMES = [
     'shadow_kv_plus_scaffold_only',
     'shadow_kv_plus_early_layer',
     'shadow_kv_plus_logit_guard',
+    'vllm_apc',
+    'vllm_apc_shadowkv_plus',
+    'sglang_radix_attention',
+    'sglang_radix_attention_shadowkv_plus',
+    'lmcache',
+    'lmcache_shadowkv_plus',
 ]
+
+
+RUNTIME_BASELINE_NAMES = [
+    'vllm_apc',
+    'vllm_apc_shadowkv_plus',
+]
+
+EXTERNAL_RUNTIME_BASELINE_NAMES = [
+    'sglang_radix_attention',
+    'sglang_radix_attention_shadowkv_plus',
+    'lmcache',
+    'lmcache_shadowkv_plus',
+]
+
+
+RUNTIME_BASELINE_FAMILIES = {
+    'vllm_apc': 'vllm_apc',
+    'vllm_apc_shadowkv_plus': 'vllm_apc',
+}
 
 
 def resolve_model(model: str | None) -> str | None:
@@ -272,6 +299,8 @@ def list_engine_names(args) -> list[str]:
     names = ['no_cache']
     if args.backend == 'vllm':
         names.append('native_prefix_cache')
+        if getattr(args, 'include_runtime_baselines', False):
+            names.extend(RUNTIME_BASELINE_NAMES)
         return names
     names.extend(
         [
@@ -288,6 +317,8 @@ def list_engine_names(args) -> list[str]:
             'shadow_kv_plus_early_layer',
             'shadow_kv_plus_logit_guard',
         ])
+    if getattr(args, 'include_runtime_baselines', False) and args.backend == 'vllm':
+        names.extend(RUNTIME_BASELINE_NAMES)
     return names
 
 
@@ -296,6 +327,28 @@ def build_engine(args, backend, engine_name: str):
         return NoCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)
     if engine_name == 'native_prefix_cache':
         return NativePrefixCachingEngine(backend=backend, max_memory_mb=args.max_memory_mb)
+    if engine_name in EXTERNAL_RUNTIME_BASELINE_NAMES:
+        raise ValueError(
+            f'{engine_name} is an external runtime baseline. Run it through '
+            'literature_accurate_baselines/run_runtime_cache_baseline.py so the measured system is the actual runtime.'
+        )
+    if engine_name in RUNTIME_BASELINE_NAMES:
+        if args.backend != 'vllm':
+            raise ValueError(f'{engine_name} requires --backend vllm for literature-accurate vLLM APC measurement.')
+        runtime_family = RUNTIME_BASELINE_FAMILIES[engine_name]
+        if engine_name.endswith('_shadowkv_plus'):
+            return AdmissionControlledRuntimeCacheEngine(
+                backend=backend,
+                max_memory_mb=args.max_memory_mb,
+                name=engine_name,
+                runtime_family=runtime_family,
+            )
+        return RuntimeNativeCacheEngine(
+            backend=backend,
+            max_memory_mb=args.max_memory_mb,
+            name=engine_name,
+            runtime_family=runtime_family,
+        )
     if engine_name == 'reactive_prefix_cache':
         return ReactivePrefixCacheEngine(backend=backend, max_memory_mb=args.max_memory_mb)
     if engine_name == 'greedy_prefix_cache':
@@ -366,6 +419,7 @@ def main() -> None:
     parser.add_argument('--disable_native_prefix_caching', action='store_true')
     parser.add_argument('--include_experimental', action='store_true')
     parser.add_argument('--engines', nargs='+', choices=ALL_ENGINE_NAMES, help='Run only the specified engines, in the given order.')
+    parser.add_argument('--include_runtime_baselines', action='store_true', help='Add in-process literature-accurate vLLM APC variants when --backend vllm. Use literature_accurate_baselines/run_runtime_cache_baseline.py for SGLang and LMCache.')
     parser.add_argument('--include_semantic_ablations', action='store_true', help='Add scaffold-only, early-layer, and logit-guarded ShadowKV++ ablation engines.')
     parser.add_argument('--enable_policy_trace', action='store_true', help='Write per-request policy_trace.jsonl. Disabled by default for performance benchmarking.')
     parser.add_argument('--allow_unsafe_semantic_kv_reuse', action='store_true', help='Allow unguarded approximate semantic KV reuse. Intended only for fake/controlled ablations.')

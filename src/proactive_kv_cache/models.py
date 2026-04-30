@@ -160,9 +160,13 @@ class HuggingFaceBackend(Backend):
             load_kwargs = {}
             if model_dtype is not None:
                 load_kwargs['torch_dtype'] = model_dtype
+            if device.startswith('cuda'):
+                load_kwargs['device_map'] = device
+                load_kwargs['low_cpu_mem_usage'] = True
             self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
             self.model.eval()
-            self.model.to(device)
+            if not device.startswith('cuda'):
+                self.model.to(device)
         except Exception as exc:
             raise RuntimeError(
                 f'Failed to load Hugging Face model {model_name!r} on device {device!r}. '

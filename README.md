@@ -60,6 +60,21 @@ Experimental engines, enabled with `--include_experimental`:
 - **FrequencySpeculativeEngine**
 - **ShadowKVEngine**
 
+Runtime cache baselines:
+- **vLLM APC**
+- **vLLM APC + ShadowKV++ admission controller**
+- **SGLang RadixAttention**
+- **SGLang RadixAttention + ShadowKV++ admission controller**
+- **LMCache**
+- **LMCache + ShadowKV++ admission controller**
+
+These are additive; the existing baselines and semantic ablations are unchanged.
+For literature-accurate results, run runtime-system baselines through
+`literature_accurate_baselines/run_runtime_cache_baseline.py`. The main
+`experiments/run_benchmark.py --include_runtime_baselines` path only adds vLLM
+APC variants when `--backend vllm`, because SGLang RadixAttention and LMCache
+must be measured against their actual external runtimes.
+
 ## Supported public datasets
 
 Conversational:
@@ -145,6 +160,34 @@ python experiments/run_benchmark.py \
   --n_requests 64 \
   --simulate_arrivals \
   --output_dir results/
+```
+
+## Runtime Baseline Examples
+
+```bash
+python experiments/run_benchmark.py \
+  --backend vllm \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --device cuda:0 \
+  --workload public_dataset \
+  --dataset samsum \
+  --prompt_mode templated \
+  --n_requests 64 \
+  --include_runtime_baselines \
+  --output_dir results/
+```
+
+For the full literature-accurate runtime set:
+
+```bash
+python literature_accurate_baselines/run_runtime_cache_baseline.py \
+  --baseline sglang_radix_attention_shadowkv_plus \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --workload public_dataset \
+  --dataset samsum \
+  --prompt_mode templated \
+  --n_requests 64 \
+  --launch_server
 ```
 
 ## GPU benchmark example

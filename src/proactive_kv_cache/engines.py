@@ -10,7 +10,7 @@ from .cache import CacheEntry, TieredStateBank
 from .metrics import summarize_run
 from .models import Backend, estimate_past_key_values_bytes
 from .policy import CostAwareSlackPolicy, FrequencyPolicy, SpeculationPolicy
-from .semantic import SemanticKVIndex, longest_common_prefix_len
+from .semantic import SemanticKVIndex, longest_common_prefix_len, token_entropy
 from .controller import AdaptiveReuseController, ReusePlan
 
 
@@ -136,7 +136,7 @@ class BaseEngine:
     def _maybe_auto_disable(self) -> None:
         if not self.cache_enabled:
             return
-        if self.name in ('no_cache', 'native_prefix_cache'):
+        if self.name in ('no_cache', 'native_prefix_cache') or bool(self.engine_metrics.get('native_runtime_cache_baseline', False)):
             return
         requests_seen = int(self.engine_metrics.get('requests_seen', 0))
         attempts = int(self.engine_metrics.get('reuse_attempts', 0))
@@ -619,6 +619,181 @@ class NativePrefixCachingEngine(BaseEngine):
                 if admitted_entry is not None:
                     matched_prefix_length = match_len
                     was_cache_hit = True
+        out = self._prefill_full(tokens)
+        self._store_native_placeholder(tokens, metadata)
+        return self._record(
+            RequestResult(
+                request_id=request_id,
+                latency_ms=out.latency_ms,
+                matched_prefix_length=matched_prefix_length,
+                tokens_recomputed=max(len(tokens) - matched_prefix_length, 0) if was_cache_hit else len(tokens),
+                was_cache_hit=was_cache_hit,
+                was_speculative_hit=False,
+                gpu_utilization_pct=out.gpu_utilization_pct,
+            )
+        )
+
+
+class RuntimeNativeCacheEngine(NativePrefixCachingEngine):
+    """Named native-runtime cache baseline.
+
+    These baselines represent runtime-managed prefix/KV caches such as vLLM APC,
+    SGLang RadixAttention, and LMCache. The repository cannot force every
+    external runtime through the in-process `Backend` interface, so this engine
+    uses the same placeholder accounting as `NativePrefixCachingEngine` while
+    preserving the runtime name in result JSON. When the backend itself exposes
+    native caching, for example vLLM with prefix caching enabled, the measured
+    latency comes from that backend path.
+    """
+
+    def __init__(
+        self,
+        backend: Backend,
+        max_memory_mb: int = 256,
+        name: str = 'runtime_native_cache',
+        runtime_family: str = 'native_runtime',
+    ):
+        super().__init__(backend=backend, max_memory_mb=max_memory_mb)
+        self.name = name
+        self.runtime_family = runtime_family
+        self.engine_metrics.update(
+            {
+                'native_runtime_cache_baseline': True,
+                'native_runtime_family': runtime_family,
+                'admission_controller_enabled': False,
+            }
+        )
+
+
+class AdmissionControlledRuntimeCacheEngine(RuntimeNativeCacheEngine):
+    """Native runtime cache baseline gated by the ShadowKV++ admission policy."""
+
+    def __init__(
+        self,
+        backend: Backend,
+        max_memory_mb: int = 256,
+        name: str = 'runtime_native_cache_shadowkv_plus',
+        runtime_family: str = 'native_runtime',
+        semantic_similarity_threshold: float = 0.58,
+    ):
+        super().__init__(
+            backend=backend,
+            max_memory_mb=max_memory_mb,
+            name=name,
+            runtime_family=runtime_family,
+        )
+        self.controller = AdaptiveReuseController(
+            min_utility_ms=0.0,
+            semantic_threshold=semantic_similarity_threshold,
+            max_layer_reuse_ratio=0.55,
+        )
+        self.engine_metrics.update(
+            {
+                'admission_controller_enabled': True,
+                'admission_plans_total': 0,
+                'admission_allow_total': 0,
+                'admission_bypass_total': 0,
+                'admission_store_total': 0,
+                'admission_store_bypass_total': 0,
+                'admission_policy_net_utility_ms': 0.0,
+                'admission_policy_expected_benefit_ms': 0.0,
+                'admission_policy_expected_cost_ms': 0.0,
+                'admission_policy_expected_waste_ms': 0.0,
+            }
+        )
+
+    def _record_admission_plan(self, plan: ReusePlan) -> None:
+        self.engine_metrics['admission_plans_total'] = int(self.engine_metrics.get('admission_plans_total', 0)) + 1
+        allowed = plan.strategy == 'exact' and plan.score >= 0.0
+        self.engine_metrics['admission_allow_total' if allowed else 'admission_bypass_total'] = int(
+            self.engine_metrics.get('admission_allow_total' if allowed else 'admission_bypass_total', 0)
+        ) + 1
+        self.engine_metrics['admission_policy_net_utility_ms'] = float(self.engine_metrics.get('admission_policy_net_utility_ms', 0.0)) + float(plan.score)
+        self.engine_metrics['admission_policy_expected_benefit_ms'] = float(self.engine_metrics.get('admission_policy_expected_benefit_ms', 0.0)) + float(plan.expected_benefit_ms)
+        self.engine_metrics['admission_policy_expected_cost_ms'] = float(self.engine_metrics.get('admission_policy_expected_cost_ms', 0.0)) + float(plan.expected_cost_ms)
+        self.engine_metrics['admission_policy_expected_waste_ms'] = float(self.engine_metrics.get('admission_policy_expected_waste_ms', 0.0)) + float(plan.expected_waste_ms)
+        self._current_trace_plan = {
+            'policy_strategy': plan.strategy,
+            'policy_speculate_depth_tokens': int(plan.speculate_depth_tokens),
+            'policy_reusable_prefix_tokens': int(plan.reusable_prefix_tokens),
+            'policy_layer_reuse_ratio': float(plan.layer_reuse_ratio),
+            'policy_expected_benefit_ms': float(plan.expected_benefit_ms),
+            'policy_expected_cost_ms': float(plan.expected_cost_ms),
+            'policy_expected_waste_ms': float(plan.expected_waste_ms),
+            'policy_score_ms': float(plan.score),
+            'policy_confidence': float(plan.confidence),
+            'policy_reason': plan.reason,
+            'admission_controller_enabled': True,
+            'native_runtime_family': self.runtime_family,
+        }
+
+    def _plan_native_admission(self, tokens: Tuple[int, ...], match, metadata: Dict | None = None) -> ReusePlan:
+        exact_len = int(match[2]) if match is not None else 0
+        sample_len = max(min(len(tokens), 32), 1)
+        full_mpt = self.ewma_full_ms_per_token or max(self.backend.estimate_prefill_cost_ms(sample_len) / sample_len, 0.05)
+        return self.controller.plan(
+            tokens=tokens,
+            exact_match_len=exact_len,
+            semantic_similarity=0.0,
+            semantic_prefix_len=0,
+            shared_prefix_hint=self._shared_prefix_hint(tokens, metadata),
+            full_ms_per_token=full_mpt,
+            reuse_overhead_ms=self.ewma_cache_reuse_overhead_ms,
+            metadata=metadata,
+        )
+
+    def _should_store_native_placeholder_with_admission(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> bool:
+        prefix_len = self._reactive_prefix_len(tokens, metadata)
+        if prefix_len < self.bank.min_match_length:
+            self.engine_metrics['admission_store_bypass_total'] = int(self.engine_metrics.get('admission_store_bypass_total', 0)) + 1
+            return False
+        if self.bank.contains(tokens[:prefix_len]):
+            return False
+
+        prefix = tokens[:prefix_len]
+        observations = self.bank.get_observation_count(prefix)
+        frequency = self.bank.get_frequency(prefix)
+        entropy = token_entropy(prefix)
+        hint_len = self._shared_prefix_hint(tokens, metadata)
+        scaffold = hint_len is not None and prefix_len >= hint_len and self._has_scaffold_hint(tokens, metadata)
+        ms_per_token = max(self.ewma_full_ms_per_token or self.backend.estimate_prefill_cost_ms(max(prefix_len, 1)) / max(prefix_len, 1), 0.05)
+        expected_benefit = prefix_len * ms_per_token * (1.10 if scaffold else min(0.25 + frequency + 0.10 * observations, 1.0))
+        expected_cost = self.ewma_cache_reuse_overhead_ms + (0.02 * max(len(tokens) - prefix_len, 0))
+        expected_waste = expected_benefit * min(max(entropy / 16.0, 0.03), 0.35) if observations < 2 and not scaffold else expected_cost * 0.03
+        allow = scaffold or (observations >= 2 and expected_benefit - expected_cost - expected_waste >= 0.0)
+        self.engine_metrics['admission_store_total' if allow else 'admission_store_bypass_total'] = int(
+            self.engine_metrics.get('admission_store_total' if allow else 'admission_store_bypass_total', 0)
+        ) + 1
+        return allow
+
+    def _store_native_placeholder(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> None:
+        if not self._should_store_native_placeholder_with_admission(tokens, metadata):
+            return
+        super()._store_native_placeholder(tokens, metadata)
+
+    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
+        self._observe_request(tokens, metadata)
+        match = self.bank.peek_match(tokens)
+        plan = self._plan_native_admission(tokens, match, metadata)
+        self._record_admission_plan(plan)
+
+        matched_prefix_length = 0
+        was_cache_hit = False
+        if match is not None and plan.strategy == 'exact':
+            _, entry, match_len = match
+            if self._should_attempt_cache_use(tokens, entry, match_len, metadata=metadata):
+                admitted_entry = self.bank.admit_match(match[0])
+                if admitted_entry is not None:
+                    matched_prefix_length = match_len
+                    was_cache_hit = True
+                    self.controller.update_feedback(hit=True, wasted_ratio=0.0)
+                else:
+                    self.controller.update_feedback(hit=False, wasted_ratio=0.0)
+            else:
+                self.controller.update_feedback(hit=False, wasted_ratio=0.0)
+        else:
+            self.controller.update_feedback(hit=False, wasted_ratio=0.0)
+
         out = self._prefill_full(tokens)
         self._store_native_placeholder(tokens, metadata)
         return self._record(
