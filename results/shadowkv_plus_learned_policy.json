@@ -1,7 +1,0 @@
-{
-  "min_reuse_density": 0.12,
-  "max_waste_ratio": 0.0,
-  "min_cache_hit_rate": 0.0,
-  "estimated_accuracy": 1.0,
-  "n_training_rows": 9
-}

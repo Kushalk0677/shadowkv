@@ -45,6 +45,23 @@ MODEL_PRESETS = {
 }
 
 
+ALL_ENGINE_NAMES = [
+    'no_cache',
+    'native_prefix_cache',
+    'reactive_prefix_cache',
+    'greedy_prefix_cache',
+    'strict_reactive_prefix_cache',
+    'frequency_speculative',
+    'shadow_kv',
+    'shadow_kv_plus',
+    'shadow_kv_plus_best_latency',
+    'shadow_kv_plus_raw_observer',
+    'shadow_kv_plus_scaffold_only',
+    'shadow_kv_plus_early_layer',
+    'shadow_kv_plus_logit_guard',
+]
+
+
 def resolve_model(model: str | None) -> str | None:
     if model is None:
         return None
@@ -250,6 +267,8 @@ def load_backend_from_args(args):
 
 
 def list_engine_names(args) -> list[str]:
+    if getattr(args, 'engines', None):
+        return list(args.engines)
     names = ['no_cache']
     if args.backend == 'vllm':
         names.append('native_prefix_cache')
@@ -346,6 +365,7 @@ def main() -> None:
     parser.add_argument('--trust_remote_code', action='store_true')
     parser.add_argument('--disable_native_prefix_caching', action='store_true')
     parser.add_argument('--include_experimental', action='store_true')
+    parser.add_argument('--engines', nargs='+', choices=ALL_ENGINE_NAMES, help='Run only the specified engines, in the given order.')
     parser.add_argument('--include_semantic_ablations', action='store_true', help='Add scaffold-only, early-layer, and logit-guarded ShadowKV++ ablation engines.')
     parser.add_argument('--enable_policy_trace', action='store_true', help='Write per-request policy_trace.jsonl. Disabled by default for performance benchmarking.')
     parser.add_argument('--allow_unsafe_semantic_kv_reuse', action='store_true', help='Allow unguarded approximate semantic KV reuse. Intended only for fake/controlled ablations.')
