@@ -30,6 +30,8 @@ from proactive_kv_cache.engines import (
 )
 from proactive_kv_cache.models import load_backend
 from proactive_kv_cache.policy import CostAwareSlackPolicy
+from proactive_kv_cache.config_loader import CONFIG
+from proactive_kv_cache.telemetry import JsonlLogger, build_run_manifest
 from proactive_kv_cache.utils import set_seed
 from proactive_kv_cache.workload import SYNTHETIC_VARIANTS, make_public_dataset_workload, make_synthetic_workload
 
@@ -422,6 +424,9 @@ def main() -> None:
     parser.add_argument('--include_runtime_baselines', action='store_true', help='Add in-process literature-accurate vLLM APC variants when --backend vllm. Use literature_accurate_baselines/run_runtime_cache_baseline.py for SGLang and LMCache.')
     parser.add_argument('--include_semantic_ablations', action='store_true', help='Add scaffold-only, early-layer, and logit-guarded ShadowKV++ ablation engines.')
     parser.add_argument('--enable_policy_trace', action='store_true', help='Write per-request policy_trace.jsonl. Disabled by default for performance benchmarking.')
+    parser.add_argument('--enable_decision_log', action='store_true', help='Write structured per-request policy decisions as JSONL.')
+    parser.add_argument('--config_path', default=None, help='Path to the versioned ShadowKV policy config.')
+    parser.add_argument('--semantic_index_diagnostics', action='store_true', help='Write semantic index diagnostic JSON for each semantic-capable engine.')
     parser.add_argument('--allow_unsafe_semantic_kv_reuse', action='store_true', help='Allow unguarded approximate semantic KV reuse. Intended only for fake/controlled ablations.')
     parser.add_argument('--early_layer_reuse_ratio', type=float, default=0.35, help='Fraction of semantic KV prefix reused in early-layer ablation.')
     parser.add_argument('--logit_guard_threshold', type=float, default=0.08, help='Maximum TV distance for logit-guard semantic reuse.')
@@ -442,6 +447,8 @@ def main() -> None:
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output_dir', default='results')
     args = parser.parse_args()
+    if args.config_path:
+        CONFIG.load(args.config_path)
     args.resolved_prompt_mode = resolve_prompt_mode(args)
     args.shadowkv_policy_calibration = None
     args.shadowkv_policy_kwargs = None
@@ -452,49 +459,67 @@ def main() -> None:
     summary = {}
     capabilities = None
     policy_trace_rows = []
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest = build_run_manifest(args=args, config_snapshot=CONFIG.snapshot(), config_hash=CONFIG.file_hash)
+    manifest_file = output_dir / 'run_manifest.json'
+    manifest_file.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+    decision_logger = None
+    decision_log_enabled = bool(args.enable_decision_log or CONFIG.get('telemetry.enabled', False))
+    if decision_log_enabled:
+        decision_logger = JsonlLogger(output_dir / str(CONFIG.get('telemetry.decision_log_name', 'policy_decisions.jsonl')))
 
-    for engine_name in engine_names:
-        set_seed(args.seed)
-        backend = load_backend_from_args(args)
-        if capabilities is None:
-            capabilities = {
-                'supports_external_kv': getattr(backend, 'supports_external_kv', False),
-                'supports_native_prefix_caching': getattr(backend, 'supports_native_prefix_caching', False),
-            }
-        engine = build_engine(args, backend, engine_name)
-        engine.trace_enabled = bool(args.enable_policy_trace)
-        shared_prefix_token_cache = {}
-        for idx, req in enumerate(requests):
-            maybe_sleep(idx, requests, args.simulate_arrivals, args.max_arrival_sleep_ms)
-            tokens = backend.tokenize(req.prompt)
-            metadata = dict(req.metadata or {})
-            metadata['arrival_time'] = req.arrival_time
-            shared_prefix_text = metadata.get('shared_prefix_text')
-            if shared_prefix_text:
-                hint_len = shared_prefix_token_cache.get(shared_prefix_text)
-                if hint_len is None:
-                    hint_len = len(backend.tokenize(shared_prefix_text))
-                    shared_prefix_token_cache[shared_prefix_text] = hint_len
-                metadata['shared_prefix_hint_tokens'] = min(int(hint_len), len(tokens))
-            engine.serve_tokens(req.request_id, tokens, metadata=metadata)
-        maybe_shutdown(engine)
-        summary[engine.name] = summarize_engine(engine)
-        if args.enable_policy_trace:
-            for row in getattr(engine, 'policy_trace_rows', []):
-                traced = dict(row)
-                traced.setdefault('engine', engine.name)
-                traced['model'] = resolve_model(args.model)
-                traced['backend'] = args.backend
-                traced['device'] = args.device
-                traced['dtype'] = args.dtype
-                traced['workload'] = args.workload
-                traced['dataset'] = args.dataset if args.workload == 'public_dataset' else None
-                traced['variant'] = args.variant if args.workload == 'synthetic' else None
-                traced['prompt_mode'] = args.resolved_prompt_mode
-                traced['seed'] = args.seed
-                policy_trace_rows.append(traced)
-        del engine
-        del backend
+    try:
+        for engine_name in engine_names:
+            set_seed(args.seed)
+            backend = load_backend_from_args(args)
+            if capabilities is None:
+                capabilities = {
+                    'supports_external_kv': getattr(backend, 'supports_external_kv', False),
+                    'supports_native_prefix_caching': getattr(backend, 'supports_native_prefix_caching', False),
+                }
+            engine = build_engine(args, backend, engine_name)
+            engine.trace_enabled = bool(args.enable_policy_trace)
+            engine.decision_logger = decision_logger
+            shared_prefix_token_cache = {}
+            for idx, req in enumerate(requests):
+                maybe_sleep(idx, requests, args.simulate_arrivals, args.max_arrival_sleep_ms)
+                tokens = backend.tokenize(req.prompt)
+                metadata = dict(req.metadata or {})
+                metadata['arrival_time'] = req.arrival_time
+                shared_prefix_text = metadata.get('shared_prefix_text')
+                if shared_prefix_text:
+                    hint_len = shared_prefix_token_cache.get(shared_prefix_text)
+                    if hint_len is None:
+                        hint_len = len(backend.tokenize(shared_prefix_text))
+                        shared_prefix_token_cache[shared_prefix_text] = hint_len
+                    metadata['shared_prefix_hint_tokens'] = min(int(hint_len), len(tokens))
+                engine.serve_tokens(req.request_id, tokens, metadata=metadata)
+            maybe_shutdown(engine)
+            summary[engine.name] = summarize_engine(engine)
+            if args.semantic_index_diagnostics and hasattr(engine, 'semantic_index'):
+                diag_file = output_dir / f'semantic_index_{engine.name}.json'
+                diag_file.write_text(json.dumps(engine.semantic_index.diagnostics(), indent=2, sort_keys=True), encoding='utf-8')
+                summary[engine.name]['semantic_index_diagnostics_file'] = str(diag_file)
+            if args.enable_policy_trace:
+                for row in getattr(engine, 'policy_trace_rows', []):
+                    traced = dict(row)
+                    traced.setdefault('engine', engine.name)
+                    traced['model'] = resolve_model(args.model)
+                    traced['backend'] = args.backend
+                    traced['device'] = args.device
+                    traced['dtype'] = args.dtype
+                    traced['workload'] = args.workload
+                    traced['dataset'] = args.dataset if args.workload == 'public_dataset' else None
+                    traced['variant'] = args.variant if args.workload == 'synthetic' else None
+                    traced['prompt_mode'] = args.resolved_prompt_mode
+                    traced['seed'] = args.seed
+                    policy_trace_rows.append(traced)
+            del engine
+            del backend
+    finally:
+        if decision_logger is not None:
+            decision_logger.close()
 
     if 'no_cache' in summary:
         baseline = summary['no_cache']
@@ -503,10 +528,12 @@ def main() -> None:
             engine_summary['speedup_vs_no_cache_p95'] = baseline['p95_latency_ms'] / max(engine_summary['p95_latency_ms'], 1e-9)
     summary['config'] = vars(args)
     summary['config']['resolved_model'] = resolve_model(args.model)
+    summary['config']['config_version'] = CONFIG.version
+    summary['config']['config_hash_sha256'] = CONFIG.file_hash
+    summary['config']['config_path'] = str(CONFIG.path)
+    summary['config']['run_manifest_file'] = str(manifest_file)
     summary['capabilities'] = capabilities or {}
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     model_slug = (resolve_model(args.model) or args.model or 'default').replace('/', '_').replace(':', '_')
     workload_slug = (
         f"{args.dataset}_{args.resolved_prompt_mode}"
@@ -528,6 +555,8 @@ def main() -> None:
         summary['config']['policy_trace_file'] = None
         summary['config']['policy_trace_rows'] = 0
         out_file.write_text(json.dumps(summary, indent=2))
+    summary['config']['decision_log_file'] = str(decision_logger.path) if decision_log_enabled and decision_logger is not None else str(output_dir / str(CONFIG.get('telemetry.decision_log_name', 'policy_decisions.jsonl'))) if decision_log_enabled else None
+    out_file.write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
     print(f'Saved to {out_file}')
     if args.enable_policy_trace:

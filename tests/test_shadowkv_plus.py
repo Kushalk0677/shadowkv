@@ -55,8 +55,35 @@ def test_shadowkv_plus_records_policy_metrics():
     for i, tokens in enumerate(requests):
         engine.serve_tokens(i, tokens, metadata={'prompt_mode': 'templated', 'shared_prefix_hint_tokens': 6})
     assert engine.engine_metrics['policy_plans_total'] == len(requests)
-    assert engine.engine_metrics['semantic_queries_total'] == len(requests)
+    assert engine.engine_metrics['semantic_queries_total'] == 0
+    assert engine.engine_metrics['semantic_queries_skipped_total'] == len(requests)
     assert 'policy_net_utility_ms' in engine.engine_metrics
+
+
+def test_shadowkv_plus_warms_templated_scaffold_before_exact_reuse():
+    backend = FakeBackend()
+    engine = ShadowKVPlusEngine(backend=backend)
+    shared = ' '.join(f'shared{i}' for i in range(24))
+    metadata = {
+        'prompt_mode': 'templated',
+        'shared_prefix_hint_tokens': 24,
+        'shared_prefix_text': shared,
+    }
+    requests = [
+        f'{shared} user tail one',
+        f'{shared} user tail two',
+        f'{shared} user tail three',
+        f'{shared} user tail four',
+    ]
+
+    for i, text in enumerate(requests):
+        engine.serve_tokens(i, backend.tokenize(text), metadata=dict(metadata))
+
+    assert engine.engine_metrics['scaffold_bypass_store_successes'] == 1
+    assert engine.engine_metrics['policy_bypass_total'] == 1
+    assert engine.engine_metrics['policy_exact_total'] == len(requests) - 1
+    assert engine.engine_metrics['reuse_successes'] == len(requests) - 1
+    assert engine.engine_metrics['auto_disabled_reason'] is None
 
 
 def test_policy_learning_returns_thresholds():
@@ -87,10 +114,10 @@ def test_shadowkv_plus_records_semantic_partial_opportunity_on_fake_backend():
     metadata = {
         'prompt_mode': 'semantic',
         'semantic_equivalence_key': 'semantic_task_classification:ag_news',
-        'shared_prefix_hint_tokens': 6,
+        'shared_prefix_hint_tokens': 8,
     }
     requests = [
-        tuple([10, 11, 12, 13, 14, 15, 100 + i]) if i % 2 == 0 else tuple([20, 21, 22, 23, 24, 25, 100 + i])
+        tuple([10, 11, 12, 13, 14, 15, 16, 17, 100 + i]) if i % 2 == 0 else tuple([20, 21, 22, 23, 24, 25, 26, 27, 100 + i])
         for i in range(12)
     ]
     for i, tokens in enumerate(requests):

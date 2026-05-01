@@ -26,8 +26,8 @@ RESULTS_ROOT = Path("results_n512")
 LOGS_ROOT = RESULTS_ROOT / "_logs"
 LOGS_ROOT.mkdir(parents=True, exist_ok=True)
 
-N_REQUESTS = 16
-SEEDS = [42]
+N_REQUESTS = 128
+SEEDS = [42, 123, 456, 789, 999]
 DATASETS = [
     "ag_news",
     "alpaca_eval",

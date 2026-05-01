@@ -1,0 +1,80 @@
+version: shadowkv-policy-v1
+profile_id: default-unprofiled
+hardware:
+  beta_prefill_ms_per_token: 0.60
+  reuse_fixed_overhead_ms: 2.0
+  kv_mb_per_token: 0.375
+  memory_bandwidth_gbps: 320.0
+  min_prefix_len: 8
+  profiled_model: null
+  profiled_device: null
+  profiled_at_utc: null
+policy:
+  utility:
+    util_min_ms: 0.0
+    suffix_cost_ms_per_token: 0.02
+    exact_min_confidence: 0.50
+    exact_max_confidence: 0.98
+    exact_confidence_base: 0.45
+    exact_confidence_reuse_weight: 0.35
+    exact_confidence_template_weight: 0.20
+    exact_layer_base: 0.20
+    exact_layer_confidence_weight: 0.30
+    semantic_threshold: 0.58
+    semantic_prompt_reuse_fraction: 0.70
+    semantic_default_reuse_fraction: 0.55
+    semantic_prompt_benefit_discount: 0.72
+    semantic_default_benefit_discount: 0.55
+    semantic_prompt_suffix_cost_ms_per_token: 0.04
+    semantic_default_suffix_cost_ms_per_token: 0.08
+    semantic_uncertainty_floor: 0.02
+    semantic_prompt_uncertainty_weight: 0.35
+    semantic_default_uncertainty_weight: 1.0
+    semantic_prompt_waste_floor: 0.03
+    semantic_default_waste_floor: 0.05
+    semantic_prompt_confidence_cap: 0.94
+    semantic_default_confidence_cap: 0.90
+    semantic_prompt_confidence_base: 0.70
+    semantic_default_confidence_base: 0.55
+    semantic_confidence_template_weight: 0.20
+    semantic_confidence_length_weight: 0.10
+    semantic_prompt_layer_weight: 0.55
+    semantic_default_layer_weight: 0.45
+    semantic_min_layer_ratio: 0.10
+  health:
+    base: 0.65
+    hit_rate_weight: 0.35
+    waste_ratio_weight: 0.45
+    min: 0.05
+    max: 1.0
+    ewma_alpha: 0.20
+  signals:
+    length_normalizer_tokens: 128.0
+    entropy_normalizer_bits: 8.0
+    entropy_penalty_weight: 0.35
+    templated_signal: 0.85
+  raw_gate:
+    min_requests: 12
+    min_observations: 8
+    min_frequency: 0.35
+    min_prefix_len: 48
+    util_min_ms: 8.0
+  speculation:
+    default_min_observations: 3
+    min_utility_score: 0.0
+semantic:
+  sandbox:
+    enabled: true
+    max_divergence: 0.08
+    top_k: 32
+    inflate_waste_weight: 1.0
+  index:
+    dims: 128
+    max_entries: 1024
+    min_similarity: 0.20
+    equivalence_key_boost: 0.92
+telemetry:
+  enabled: false
+  include_request_text: false
+  max_request_text_chars: 240
+  decision_log_name: policy_decisions.jsonl

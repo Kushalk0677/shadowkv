@@ -4,6 +4,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 
+from .config_loader import CONFIG
+
 
 @dataclass
 class PrefillResult:
@@ -160,13 +162,9 @@ class HuggingFaceBackend(Backend):
             load_kwargs = {}
             if model_dtype is not None:
                 load_kwargs['torch_dtype'] = model_dtype
-            if device.startswith('cuda'):
-                load_kwargs['device_map'] = device
-                load_kwargs['low_cpu_mem_usage'] = True
             self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
             self.model.eval()
-            if not device.startswith('cuda'):
-                self.model.to(device)
+            self.model.to(device)
         except Exception as exc:
             raise RuntimeError(
                 f'Failed to load Hugging Face model {model_name!r} on device {device!r}. '
@@ -224,7 +222,9 @@ class HuggingFaceBackend(Backend):
 
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         if self.device.startswith('cuda'):
-            return float(0.6 * max(token_count, 0) + 5.0)
+            beta = float(CONFIG.get('hardware.beta_prefill_ms_per_token', 0.60))
+            delta = float(CONFIG.get('hardware.reuse_fixed_overhead_ms', 2.0))
+            return float(beta * max(token_count, 0) + max(delta, 5.0))
         return float(1.1 * max(token_count, 0) + 8.0)
 
     def prepare_past_key_values(self, past_key_values: Any) -> Any:

@@ -11,6 +11,8 @@ class RunSummary:
     mean_latency_ms: float
     p50_latency_ms: float
     p95_latency_ms: float
+    p99_latency_ms: float
+    p999_latency_ms: float
     throughput_rps: float
     service_throughput_rps: float
     hit_rate: float
@@ -67,6 +69,8 @@ def summarize_run(
     mean_latency = float(lat.mean()) if lat.size else 0.0
     p50 = float(np.percentile(lat, 50)) if lat.size else 0.0
     p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
+    p99 = float(np.percentile(lat, 99)) if lat.size else 0.0
+    p999 = float(np.percentile(lat, 99.9)) if lat.size else 0.0
 
     speculative_hits = int(bank_metrics.get('speculative_hits', 0))
     speculative_hit_rate = float(bank_metrics.get('speculative_hit_rate', 0.0))
@@ -113,6 +117,8 @@ def summarize_run(
         mean_latency_ms=mean_latency,
         p50_latency_ms=p50,
         p95_latency_ms=p95,
+        p99_latency_ms=p99,
+        p999_latency_ms=p999,
         throughput_rps=throughput,
         service_throughput_rps=service_throughput,
         hit_rate=hit_rate,
