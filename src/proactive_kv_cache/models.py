@@ -4,8 +4,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 
-from .config_loader import CONFIG
-
 
 @dataclass
 class PrefillResult:
@@ -222,9 +220,7 @@ class HuggingFaceBackend(Backend):
 
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         if self.device.startswith('cuda'):
-            beta = float(CONFIG.get('hardware.beta_prefill_ms_per_token', 0.60))
-            delta = float(CONFIG.get('hardware.reuse_fixed_overhead_ms', 2.0))
-            return float(beta * max(token_count, 0) + max(delta, 5.0))
+            return float(0.6 * max(token_count, 0) + 5.0)
         return float(1.1 * max(token_count, 0) + 8.0)
 
     def prepare_past_key_values(self, past_key_values: Any) -> Any:

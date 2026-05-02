@@ -1,240 +1,293 @@
-# ShadowKV / ShadowKV++ Research Repository
+# ShadowKV++
 
-This is now the integrated full research-grade repository. It preserves the original benchmark harness and result archives, while adding **ShadowKV++** as a policy-driven, semantic-signal, fine-grained, waste-aware KV reuse engine.
+ShadowKV++ is a research prototype for **waste-aware, correctness-bounded KV cache reuse** in LLM serving. It extends a tiered prefix-cache benchmark harness with a per-request policy controller that decides when to reuse, when to speculate, and when to bypass the cache entirely.
 
-## What is new in ShadowKV++
+This repository is prepared for artifact review and reproduction. It contains source code, tests, benchmark scripts, and the two canonical 3-seed hardware result trees used by the current paper draft.
 
-ShadowKV++ changes the research framing from "a cache that reacts" to "an inference controller that decides."
+## Included Artifact
 
-New integrated modules:
+Canonical result roots:
 
-- `src/proactive_kv_cache/controller.py` — pre-execution adaptive reuse controller.
-- `src/proactive_kv_cache/semantic.py` — lightweight semantic/structural KV prefix index.
-- `src/proactive_kv_cache/policy_learning.py` — offline learner for deployment thresholds from benchmark logs.
-- `ShadowKVPlusEngine` in `src/proactive_kv_cache/engines.py`.
-- `experiments/analyze_shadowkv_results.py` — parses JSON files and result zips into CSV, Markdown, and learned policy JSON.
-- `docs/shadowkv_plus_research_design.md` — paper-grade research design and claim boundaries.
+- `results/final_p100`
+- `results/final_t4`
 
-Important correctness boundary: real backends only perform exact-prefix KV reuse. Approximate semantic partial reuse is treated as simulator/research-mode unless a backend-specific correctness validation is added.
+Generated summaries:
 
-## Fast validation
+- `results/RESULTS.md`
+- `results/manifest.json`
+- `results/summary_by_engine.csv`
+- `results/summary_by_mode_engine.csv`
+
+Included result inventory:
+
+- 898 benchmark JSON files
+- 8532 engine-result rows
+- Seeds: `42`, `123`, `456`
+- Models: GPT-2, TinyLlama-1.1B-Chat, Qwen2.5-1.5B-Instruct, Gemma-2B-IT, Phi-3-mini-4k-instruct
+- Datasets: AG News, Banking77, AlpacaEval, Dolly, DailyDialog, OASST1, UltraChat, SAMSum, XSum, CNN/DailyMail
+- Prompt modes: `raw`, `templated`, `semantic`
+
+Note: the T4 result tree has 448 benchmark files rather than 450 because two Phi-3 templated runs were unavailable in the source bundle. This is recorded in `results/manifest.json`.
+
+## Main Claims To Reproduce
+
+From the included JSON files:
+
+| Engine | Mean Speedup | Waste | Hit Rate |
+|---|---:|---:|---:|
+| `no_cache` | 1.000x | 0.000 | 0.000 |
+| `reactive_prefix_cache` | 1.214x | 0.000 | 0.317 |
+| `greedy_prefix_cache` | 1.221x | 0.000 | 0.320 |
+| `strict_reactive_prefix_cache` | 1.254x | 0.000 | 0.310 |
+| `frequency_speculative` | 1.208x | 0.284 | 0.617 |
+| `shadow_kv` | 1.287x | 0.264 | 0.606 |
+| `shadow_kv_plus` | 1.365x | 0.156 | 0.402 |
+
+Interpretation boundaries:
+
+- Raw-mode ShadowKV++ gains are primarily **bypass/overhead avoidance**, not exact KV reuse.
+- Real HF backends should treat approximate semantic KV substitution as unsafe unless an explicit backend guard validates it.
+- The included artifact is a controlled benchmark-harness evaluation, not a native vLLM/SGLang/LMCache production integration.
+
+## Repository Layout
+
+```text
+src/proactive_kv_cache/          Core engines, cache bank, controller, models
+experiments/run_benchmark.py     Main benchmark entry point
+experiments/analyze_shadowkv_results.py
+                                 Result parser and policy-summary generator
+tests/                           Unit and regression tests
+docs/                            Design notes and correctness docs
+results/final_p100               Canonical P100 result tree
+results/final_t4                 Canonical T4 result tree
+```
+
+## Setup
+
+Python 3.10+ is recommended.
+
+```bash
+git clone <repo-url>
+cd <repo>
+
+python -m venv .venv
+source .venv/bin/activate
+
+pip install -U pip setuptools wheel
+pip install -e .
+pip install pytest
+```
+
+On Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -U pip setuptools wheel
+pip install -e .
+pip install pytest
+```
+
+The project dependencies are declared in `pyproject.toml`; `requirements.txt` is provided for simple environments.
+
+## Validate The Code
+
+Run the test suite:
 
 ```bash
 python -m pytest -q
-python experiments/run_benchmark.py --backend fake --workload synthetic --variant high_skew --n_requests 40 --include_experimental --disable_arrival_simulation --output_dir results/
-python experiments/analyze_shadowkv_results.py results/
 ```
 
-## Research-grade comparison command
+Expected result for this release:
+
+```text
+49 passed, 1 skipped
+```
+
+The skipped test is an optional slow Hugging Face KV-correctness check. Enable it with:
 
 ```bash
-python experiments/run_benchmark.py \
-  --backend hf \
-  --model distilgpt2 \
-  --device cpu \
-  --workload public_dataset \
-  --dataset samsum \
-  --prompt_mode templated \
-  --n_requests 64 \
-  --include_experimental \
-  --output_dir results/
+RUN_HF_KV_CORRECTNESS=1 python -m pytest -q tests/test_backend_regressions.py
 ```
 
----
+## Regenerate Result Summaries
 
-# ShadowKV: Tiered Prefix Caching for LLM Serving
-
-Research code for testing adaptive prefix reuse in LLM serving. The repository includes CPU-friendly baselines, public dataset loaders, benchmark scripts, and basic diagnostics.
-
-## Included baselines
-
-Default benchmark set:
-1. **NoCacheEngine**
-   - every request performs full prefill
-2. **ReactivePrefixCacheEngine**
-   - classic reactive prefix reuse after the first request
-3. **StrictReactivePrefixCacheEngine**
-   - a more conservative variant with stronger reuse gates
-
-Experimental engines, enabled with `--include_experimental`:
-- **FrequencySpeculativeEngine**
-- **ShadowKVEngine**
-
-Runtime cache baselines:
-- **vLLM APC**
-- **vLLM APC + ShadowKV++ admission controller**
-- **SGLang RadixAttention**
-- **SGLang RadixAttention + ShadowKV++ admission controller**
-- **LMCache**
-- **LMCache + ShadowKV++ admission controller**
-
-These are additive; the existing baselines and semantic ablations are unchanged.
-For literature-accurate results, run runtime-system baselines through
-`literature_accurate_baselines/run_runtime_cache_baseline.py`. The main
-`experiments/run_benchmark.py --include_runtime_baselines` path only adds vLLM
-APC variants when `--backend vllm`, because SGLang RadixAttention and LMCache
-must be measured against their actual external runtimes.
-
-## Supported public datasets
-
-Conversational:
-- `daily_dialog` -> DailyDialog-style chat prompts
-- `oasst1` -> OpenAssistant conversational/instructional turns
-
-Instruction:
-- `dolly` -> Databricks Dolly 15k instruction data
-- `alpaca_eval` -> AlpacaEval instruction prompts
-
-Also included:
-- `xsum`
-- `cnn_dailymail`
-- `ag_news`
-- `banking77`
-- `ultrachat`
-
-Some Hugging Face datasets use script-based loaders that are not supported by recent `datasets` releases. The registry uses compatible parquet mirrors where needed.
-
-## Supported models
-
-Small / CPU-friendly:
-- `tiny` -> `sshleifer/tiny-gpt2`
-- `distilgpt2` -> `distilgpt2`
-
-Larger / GPU-oriented:
-- `mistral7b` -> `mistralai/Mistral-7B-Instruct-v0.3`
-- `llama31_8b` -> `meta-llama/Llama-3.1-8B-Instruct`
-
-Notes:
-- Mistral and Llama variants may require accepting Hugging Face terms or using a token depending on the model page and license gating.
-- `distilgpt2` is a public small GPT-2 variant suitable for lightweight experiments.
-
-## Current status
-
-This is exploratory research code. Fake-backend results are useful for smoke tests, but not for performance claims. Stronger claims need repeated HF or vLLM runs, multiple seeds, and reporting of speculative waste.
-
-For Hugging Face external-KV experiments, check that cached prefix + suffix prefill matches full prefill for the target model family before treating latency numbers as evidence.
-
-## Metrics tracked
-
-Per run:
-- mean latency
-- p50 latency
-- p95 latency
-- throughput (requests/sec)
-- service throughput (requests/sec based on summed request latency)
-- cache hit rate
-- speculative hit rate
-- speculative precompute count
-- speculative cost (ms)
-- wasted precomputes
-- wasted compute (ms)
-- wasted compute ratio
-- utility proxy
-- mean GPU utilization when available
-- promotions / demotions between tiers
-
-## Install
+The included CSV/Markdown summaries can be regenerated from the bundled JSON files:
 
 ```bash
-pip install -r requirements.txt
+python experiments/analyze_shadowkv_results.py \
+  results/final_p100 results/final_t4 \
+  --csv results/shadowkv_result_summary.csv \
+  --markdown results/shadowkv_result_summary.md \
+  --policy-json results/shadowkv_plus_learned_policy.json
 ```
 
-Optional GPU utilization sampling uses `pynvml` through `nvidia-ml-py3` when available.
-
-## Quick smoke test
+The release also includes a compact handoff summary:
 
 ```bash
-python -m pytest -q
-python experiments/smoke_test.py
+cat results/RESULTS.md
+cat results/manifest.json
 ```
 
-## CPU benchmark example
+## Smoke Benchmark
 
-```bash
-python experiments/run_benchmark.py \
-  --backend hf \
-  --model distilgpt2 \
-  --device cpu \
-  --workload public_dataset \
-  --dataset samsum \
-  --n_requests 64 \
-  --simulate_arrivals \
-  --output_dir results/
-```
-
-## Runtime Baseline Examples
-
-```bash
-python experiments/run_benchmark.py \
-  --backend vllm \
-  --model Qwen/Qwen2.5-1.5B-Instruct \
-  --device cuda:0 \
-  --workload public_dataset \
-  --dataset samsum \
-  --prompt_mode templated \
-  --n_requests 64 \
-  --include_runtime_baselines \
-  --output_dir results/
-```
-
-For the full literature-accurate runtime set:
-
-```bash
-python literature_accurate_baselines/run_runtime_cache_baseline.py \
-  --baseline sglang_radix_attention_shadowkv_plus \
-  --model Qwen/Qwen2.5-1.5B-Instruct \
-  --workload public_dataset \
-  --dataset samsum \
-  --prompt_mode templated \
-  --n_requests 64 \
-  --launch_server
-```
-
-## GPU benchmark example
-
-```bash
-python experiments/run_benchmark.py \
-  --backend hf \
-  --model mistral7b \
-  --device cuda:0 \
-  --dtype float16 \
-  --workload public_dataset \
-  --dataset dolly \
-  --n_requests 64 \
-  --simulate_arrivals \
-  --output_dir results/
-```
-
-## Semantic/paraphrase novelty workload
-
-The repository now supports a fourth prompt mode:
-
-```bash
---prompt_mode semantic
-```
-
-This mode rotates paraphrased scaffolds for the same underlying task family. It is
-intended to evaluate whether ShadowKV++ can detect semantic reuse opportunities
-that exact-prefix caches cannot exploit.
-
-For controlled local ablation without downloading datasets:
+A fast dependency-light smoke test uses the fake backend:
 
 ```bash
 python experiments/run_benchmark.py \
   --backend fake \
   --workload synthetic \
-  --variant semantic_paraphrase \
-  --n_requests 32 \
+  --variant high_skew \
+  --n_requests 40 \
   --include_experimental \
-  --output_dir results/semantic_fake_smoke
+  --disable_arrival_simulation \
+  --output_dir results/smoke_fake
 ```
 
-For HF public-dataset novelty evaluation:
+This verifies the benchmark pipeline without downloading models or datasets.
+
+## HF Benchmark Example
+
+CPU-friendly example:
 
 ```bash
-python experiments/run_semantic_novelty_matrix.py
+python experiments/run_benchmark.py \
+  --backend hf \
+  --model distilgpt2 \
+  --device cpu \
+  --workload public_dataset \
+  --dataset ag_news \
+  --prompt_mode templated \
+  --n_requests 32 \
+  --include_experimental \
+  --disable_arrival_simulation \
+  --output_dir results/hf_cpu_agnews_templated
 ```
 
-On real HF backends, semantic opportunities are reported but approximate KV reuse
-is blocked by default for correctness. Inspect `semantic_opportunity_*` and
-`semantic_blocked_by_backend_total` metrics.
+GPU example:
+
+```bash
+python experiments/run_benchmark.py \
+  --backend hf \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --device cuda:0 \
+  --dtype float16 \
+  --workload public_dataset \
+  --dataset ag_news \
+  --prompt_mode templated \
+  --n_requests 64 \
+  --include_experimental \
+  --disable_arrival_simulation \
+  --output_dir results/hf_qwen_agnews_templated
+```
+
+If using older GPUs such as NVIDIA P100, use a PyTorch wheel that supports compute capability `sm_60`. Modern vLLM/SGLang wheels may require newer GPUs.
+
+## Reproduce A Small Matrix
+
+This reproduces one model/dataset across the three prompt modes and three seeds:
+
+```bash
+MODEL="Qwen/Qwen2.5-1.5B-Instruct"
+DATASET="ag_news"
+N=64
+OUT="results/reproduction_qwen_agnews"
+
+for SEED in 42 123 456; do
+  for MODE in raw templated semantic; do
+    python experiments/run_benchmark.py \
+      --backend hf \
+      --model "$MODEL" \
+      --device cuda:0 \
+      --dtype float16 \
+      --workload public_dataset \
+      --dataset "$DATASET" \
+      --prompt_mode "$MODE" \
+      --n_requests "$N" \
+      --seed "$SEED" \
+      --include_experimental \
+      --disable_arrival_simulation \
+      --output_dir "$OUT/$MODE/seed_$SEED"
+  done
+done
+```
+
+Then summarize:
+
+```bash
+python experiments/analyze_shadowkv_results.py "$OUT"
+```
+
+## Reproduce The Full Harness Evaluation
+
+The full paper-style sweep is expensive because it spans five models, ten datasets, three prompt modes, and three seeds on GPU. Use this only on a machine with sufficient GPU availability and model access:
+
+```bash
+MODELS=(
+  "gpt2"
+  "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  "Qwen/Qwen2.5-1.5B-Instruct"
+  "google/gemma-2b-it"
+  "microsoft/Phi-3-mini-4k-instruct"
+)
+
+DATASETS=(
+  ag_news banking77 alpaca_eval dolly daily_dialog
+  oasst1 ultrachat samsum xsum cnn_dailymail
+)
+
+MODES=(raw templated semantic)
+SEEDS=(42 123 456)
+N=64
+OUT="results/full_reproduction"
+
+for MODEL in "${MODELS[@]}"; do
+  MODEL_DIR=$(echo "$MODEL" | tr '/.' '__')
+  for MODE in "${MODES[@]}"; do
+    for SEED in "${SEEDS[@]}"; do
+      for DATASET in "${DATASETS[@]}"; do
+        python experiments/run_benchmark.py \
+          --backend hf \
+          --model "$MODEL" \
+          --device cuda:0 \
+          --dtype float16 \
+          --workload public_dataset \
+          --dataset "$DATASET" \
+          --prompt_mode "$MODE" \
+          --n_requests "$N" \
+          --seed "$SEED" \
+          --include_experimental \
+          --disable_arrival_simulation \
+          --output_dir "$OUT/$MODEL_DIR/$MODE/seed_$SEED/$DATASET"
+      done
+    done
+  done
+done
+```
+
+The exact latency values will vary by GPU, driver, PyTorch, Transformers version, and Hugging Face dataset/model cache state.
+
+## Important Correctness Boundary
+
+Exact-prefix KV reuse is semantics-preserving under causal attention. Approximate semantic KV reuse is not generally correctness-preserving.
+
+ShadowKV++ therefore separates:
+
+- semantic opportunity detection,
+- utility scoring,
+- execution admission,
+- and backend correctness validation.
+
+For real HF backends, report semantic opportunity metrics separately from exact-prefix cache-hit metrics unless a backend-specific guard validates approximate reuse.
+
+## Citation
+
+If you use this artifact, cite the associated ShadowKV++ manuscript and include the result manifest:
+
+```text
+results/manifest.json
+```
+
+## Acknowledgements
+
+The included P100 experiments were run using NVIDIA P100 GPU access provided by Prof. Sparsh Mittal and the Department of Electronics and Communication Engineering, IIT Roorkee.

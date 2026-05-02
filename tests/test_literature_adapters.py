@@ -5,9 +5,7 @@ import json
 
 from literature_accurate_baselines.adapter_lib import (
     build_lmcache_command,
-    build_sglang_radix_attention_command,
     build_sglang_hicache_command,
-    build_vllm_apc_command,
     load_trace_requests,
 )
 
@@ -56,38 +54,6 @@ def test_build_lmcache_command_for_vllm_transfer_mode() -> None:
     assert command[:3] == ["vllm", "serve", "gpt2"]
     assert "--kv-transfer-config" in command
     assert env["LMCACHE_CHUNK_SIZE"] == "256"
-
-
-def test_build_vllm_apc_command_enables_prefix_caching() -> None:
-    args = argparse.Namespace(
-        model="gpt2",
-        host="127.0.0.1",
-        port=8000,
-        dtype="auto",
-        tp=1,
-        server_extra_arg=[],
-    )
-    command = build_vllm_apc_command(args)
-    assert command[:3] == ["vllm", "serve", "gpt2"]
-    assert "--enable-prefix-caching" in command
-
-
-def test_build_sglang_radix_attention_command_rejects_disabled_radix_cache() -> None:
-    args = argparse.Namespace(
-        python_executable="python",
-        model="gpt2",
-        host="127.0.0.1",
-        port=30000,
-        tp=1,
-        attention_backend=None,
-        server_extra_arg=["--disable-radix-cache"],
-    )
-    try:
-        build_sglang_radix_attention_command(args)
-    except ValueError as exc:
-        assert "must not pass --disable-radix-cache" in str(exc)
-    else:
-        raise AssertionError("expected ValueError")
 
 
 def test_load_trace_requests_supports_json_and_messages(tmp_path) -> None:

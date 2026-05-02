@@ -10,11 +10,8 @@ from .cache import CacheEntry, TieredStateBank
 from .metrics import summarize_run
 from .models import Backend, estimate_past_key_values_bytes
 from .policy import CostAwareSlackPolicy, FrequencyPolicy, SpeculationPolicy
-from .semantic import SemanticKVIndex, longest_common_prefix_len, token_entropy
+from .semantic import SemanticKVIndex, longest_common_prefix_len
 from .controller import AdaptiveReuseController, ReusePlan
-from .config_loader import CONFIG
-from .prefix_gate import breakeven_prefix_len
-from .backend.fake_backend import SemanticSafetySandbox
 
 
 @dataclass
@@ -78,12 +75,11 @@ class BaseEngine:
         self.cache_enabled = True
         self.ewma_full_ms_per_token = 0.0
         self.ewma_reuse_ms_per_token = 0.0
-        self.ewma_cache_reuse_overhead_ms = float(getattr(backend, 'default_cache_reuse_overhead_ms', CONFIG.get('hardware.reuse_fixed_overhead_ms', 2.0)))
+        self.ewma_cache_reuse_overhead_ms = float(getattr(backend, 'default_cache_reuse_overhead_ms', 2.0))
         self._stats_alpha = 0.20
         self.tuning = self._default_tuning()
         self.policy_trace_rows: List[Dict] = []
         self.trace_enabled = False
-        self.decision_logger = None
         self._current_trace_context: Dict | None = None
         self._current_trace_plan: Dict | None = None
         self._current_semantic_match: Dict | None = None
@@ -140,7 +136,7 @@ class BaseEngine:
     def _maybe_auto_disable(self) -> None:
         if not self.cache_enabled:
             return
-        if self.name in ('no_cache', 'native_prefix_cache') or bool(self.engine_metrics.get('native_runtime_cache_baseline', False)):
+        if self.name in ('no_cache', 'native_prefix_cache'):
             return
         requests_seen = int(self.engine_metrics.get('requests_seen', 0))
         attempts = int(self.engine_metrics.get('reuse_attempts', 0))
@@ -154,12 +150,6 @@ class BaseEngine:
         if requests_seen >= 4:
             all_misses = int(bank_snapshot.get('hits', 0)) == 0 and int(bank_snapshot.get('misses', 0)) >= requests_seen
             if all_misses and attempts == 0 and store_successes >= 3:
-                scaffold_warmup_stores = (
-                    int(self.engine_metrics.get('scaffold_bypass_store_successes', 0))
-                    + int(self.engine_metrics.get('semantic_scaffold_store_successes', 0))
-                )
-                if scaffold_warmup_stores > 0 and requests_seen < min_requests:
-                    return
                 self._set_cache_disabled('no_prefix_reuse_early')
                 return
         if requests_seen < min_requests or attempts < min_attempts:
@@ -197,7 +187,7 @@ class BaseEngine:
         self.end_time = time.perf_counter()
 
     def _append_policy_trace(self, result: RequestResult) -> None:
-        if not getattr(self, 'trace_enabled', False) and self.decision_logger is None:
+        if not getattr(self, 'trace_enabled', False):
             return
         context = dict(self._current_trace_context or {})
         metadata = context.pop('metadata', {})
@@ -207,8 +197,6 @@ class BaseEngine:
             'engine': self.name,
             'request_id': result.request_id,
             'latency_ms': float(result.latency_ms),
-            'request_start_s': context.get('request_start_s'),
-            'request_end_s': time.perf_counter(),
             'token_count': token_count,
             'matched_prefix_length': int(result.matched_prefix_length),
             'tokens_recomputed': int(result.tokens_recomputed),
@@ -236,7 +224,6 @@ class BaseEngine:
             'ewma_reuse_ms_per_token_before': context.get('ewma_reuse_ms_per_token_before'),
             'ewma_cache_reuse_overhead_ms_before': context.get('ewma_cache_reuse_overhead_ms_before'),
             'metadata': metadata,
-            'request_text': context.get('request_text'),
             'label_reused': 1 if result.was_cache_hit else 0,
             'label_bypassed_or_miss': 1 if not result.was_cache_hit else 0,
         }
@@ -246,10 +233,7 @@ class BaseEngine:
             row.update(self._current_semantic_match)
         if token_count > 0:
             row['actual_reuse_fraction'] = float(result.matched_prefix_length / max(token_count, 1))
-        if getattr(self, 'trace_enabled', False):
-            self.policy_trace_rows.append(row)
-        if self.decision_logger is not None:
-            self.decision_logger.write(row)
+        self.policy_trace_rows.append(row)
 
     def _record(self, result: RequestResult) -> RequestResult:
         self.latencies.append(result.latency_ms)
@@ -350,25 +334,14 @@ class BaseEngine:
         return out
 
     def _observe_request(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> None:
-        request_text = None
-        if bool(CONFIG.get('telemetry.include_request_text', False)) and hasattr(self.backend, 'decode'):
-            try:
-                request_text = self.backend.decode(tokens)
-                max_chars = int(CONFIG.get('telemetry.max_request_text_chars', 240))
-                if isinstance(request_text, str) and len(request_text) > max_chars:
-                    request_text = request_text[:max_chars] + '...'
-            except Exception:
-                request_text = None
         self._current_trace_context = {
             'token_count': len(tokens),
-            'request_start_s': time.perf_counter(),
             'shared_prefix_hint_tokens': self._shared_prefix_hint(tokens, metadata),
             'cache_enabled_before': bool(self.cache_enabled),
             'ewma_full_ms_per_token_before': float(self.ewma_full_ms_per_token),
             'ewma_reuse_ms_per_token_before': float(self.ewma_reuse_ms_per_token),
             'ewma_cache_reuse_overhead_ms_before': float(self.ewma_cache_reuse_overhead_ms),
             'metadata': self._safe_trace_metadata(metadata),
-            'request_text': request_text,
         }
         self._current_trace_plan = None
         self._current_semantic_match = None
@@ -421,17 +394,6 @@ class BaseEngine:
         gross_saved = max(matched_cost, 0.0)
         # Shared prompt scaffolds are deliberately stable across requests, so
         # use a lighter penalty than the generic reactive path.
-        penalty = (self.ewma_cache_reuse_overhead_ms * 0.35) + 0.01 * max(suffix_len, 0)
-        return gross_saved - penalty - 0.03 * suffix_cost
-
-    def _calibrated_scaffold_saved_ms(self, total_tokens: int, match_len: int, suffix_len: int) -> float:
-        mpt = max(
-            float(self.ewma_full_ms_per_token or 0.0),
-            float(CONFIG.get('hardware.beta_prefill_ms_per_token', getattr(self.backend, 'default_ms_per_token', 0.6))),
-            0.05,
-        )
-        gross_saved = max(match_len, 0) * mpt
-        suffix_cost = max(suffix_len, 0) * mpt
         penalty = (self.ewma_cache_reuse_overhead_ms * 0.35) + 0.01 * max(suffix_len, 0)
         return gross_saved - penalty - 0.03 * suffix_cost
 
@@ -536,7 +498,7 @@ class BaseEngine:
             self.bank.add_metric('bypassed_matches', 1)
             return False
         estimated_saved = (
-            self._calibrated_scaffold_saved_ms(total_tokens, match_len, suffix_len)
+            self._estimate_scaffold_saved_ms(total_tokens, match_len, suffix_len)
             if scaffold_match
             else self._estimate_saved_ms(total_tokens, match_len, suffix_len)
         )
@@ -657,181 +619,6 @@ class NativePrefixCachingEngine(BaseEngine):
                 if admitted_entry is not None:
                     matched_prefix_length = match_len
                     was_cache_hit = True
-        out = self._prefill_full(tokens)
-        self._store_native_placeholder(tokens, metadata)
-        return self._record(
-            RequestResult(
-                request_id=request_id,
-                latency_ms=out.latency_ms,
-                matched_prefix_length=matched_prefix_length,
-                tokens_recomputed=max(len(tokens) - matched_prefix_length, 0) if was_cache_hit else len(tokens),
-                was_cache_hit=was_cache_hit,
-                was_speculative_hit=False,
-                gpu_utilization_pct=out.gpu_utilization_pct,
-            )
-        )
-
-
-class RuntimeNativeCacheEngine(NativePrefixCachingEngine):
-    """Named native-runtime cache baseline.
-
-    These baselines represent runtime-managed prefix/KV caches such as vLLM APC,
-    SGLang RadixAttention, and LMCache. The repository cannot force every
-    external runtime through the in-process `Backend` interface, so this engine
-    uses the same placeholder accounting as `NativePrefixCachingEngine` while
-    preserving the runtime name in result JSON. When the backend itself exposes
-    native caching, for example vLLM with prefix caching enabled, the measured
-    latency comes from that backend path.
-    """
-
-    def __init__(
-        self,
-        backend: Backend,
-        max_memory_mb: int = 256,
-        name: str = 'runtime_native_cache',
-        runtime_family: str = 'native_runtime',
-    ):
-        super().__init__(backend=backend, max_memory_mb=max_memory_mb)
-        self.name = name
-        self.runtime_family = runtime_family
-        self.engine_metrics.update(
-            {
-                'native_runtime_cache_baseline': True,
-                'native_runtime_family': runtime_family,
-                'admission_controller_enabled': False,
-            }
-        )
-
-
-class AdmissionControlledRuntimeCacheEngine(RuntimeNativeCacheEngine):
-    """Native runtime cache baseline gated by the ShadowKV++ admission policy."""
-
-    def __init__(
-        self,
-        backend: Backend,
-        max_memory_mb: int = 256,
-        name: str = 'runtime_native_cache_shadowkv_plus',
-        runtime_family: str = 'native_runtime',
-        semantic_similarity_threshold: float = 0.58,
-    ):
-        super().__init__(
-            backend=backend,
-            max_memory_mb=max_memory_mb,
-            name=name,
-            runtime_family=runtime_family,
-        )
-        self.controller = AdaptiveReuseController(
-            min_utility_ms=0.0,
-            semantic_threshold=semantic_similarity_threshold,
-            max_layer_reuse_ratio=0.55,
-        )
-        self.engine_metrics.update(
-            {
-                'admission_controller_enabled': True,
-                'admission_plans_total': 0,
-                'admission_allow_total': 0,
-                'admission_bypass_total': 0,
-                'admission_store_total': 0,
-                'admission_store_bypass_total': 0,
-                'admission_policy_net_utility_ms': 0.0,
-                'admission_policy_expected_benefit_ms': 0.0,
-                'admission_policy_expected_cost_ms': 0.0,
-                'admission_policy_expected_waste_ms': 0.0,
-            }
-        )
-
-    def _record_admission_plan(self, plan: ReusePlan) -> None:
-        self.engine_metrics['admission_plans_total'] = int(self.engine_metrics.get('admission_plans_total', 0)) + 1
-        allowed = plan.strategy == 'exact' and plan.score >= 0.0
-        self.engine_metrics['admission_allow_total' if allowed else 'admission_bypass_total'] = int(
-            self.engine_metrics.get('admission_allow_total' if allowed else 'admission_bypass_total', 0)
-        ) + 1
-        self.engine_metrics['admission_policy_net_utility_ms'] = float(self.engine_metrics.get('admission_policy_net_utility_ms', 0.0)) + float(plan.score)
-        self.engine_metrics['admission_policy_expected_benefit_ms'] = float(self.engine_metrics.get('admission_policy_expected_benefit_ms', 0.0)) + float(plan.expected_benefit_ms)
-        self.engine_metrics['admission_policy_expected_cost_ms'] = float(self.engine_metrics.get('admission_policy_expected_cost_ms', 0.0)) + float(plan.expected_cost_ms)
-        self.engine_metrics['admission_policy_expected_waste_ms'] = float(self.engine_metrics.get('admission_policy_expected_waste_ms', 0.0)) + float(plan.expected_waste_ms)
-        self._current_trace_plan = {
-            'policy_strategy': plan.strategy,
-            'policy_speculate_depth_tokens': int(plan.speculate_depth_tokens),
-            'policy_reusable_prefix_tokens': int(plan.reusable_prefix_tokens),
-            'policy_layer_reuse_ratio': float(plan.layer_reuse_ratio),
-            'policy_expected_benefit_ms': float(plan.expected_benefit_ms),
-            'policy_expected_cost_ms': float(plan.expected_cost_ms),
-            'policy_expected_waste_ms': float(plan.expected_waste_ms),
-            'policy_score_ms': float(plan.score),
-            'policy_confidence': float(plan.confidence),
-            'policy_reason': plan.reason,
-            'admission_controller_enabled': True,
-            'native_runtime_family': self.runtime_family,
-        }
-
-    def _plan_native_admission(self, tokens: Tuple[int, ...], match, metadata: Dict | None = None) -> ReusePlan:
-        exact_len = int(match[2]) if match is not None else 0
-        sample_len = max(min(len(tokens), 32), 1)
-        full_mpt = self.ewma_full_ms_per_token or max(self.backend.estimate_prefill_cost_ms(sample_len) / sample_len, 0.05)
-        return self.controller.plan(
-            tokens=tokens,
-            exact_match_len=exact_len,
-            semantic_similarity=0.0,
-            semantic_prefix_len=0,
-            shared_prefix_hint=self._shared_prefix_hint(tokens, metadata),
-            full_ms_per_token=full_mpt,
-            reuse_overhead_ms=self.ewma_cache_reuse_overhead_ms,
-            metadata=metadata,
-        )
-
-    def _should_store_native_placeholder_with_admission(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> bool:
-        prefix_len = self._reactive_prefix_len(tokens, metadata)
-        if prefix_len < self.bank.min_match_length:
-            self.engine_metrics['admission_store_bypass_total'] = int(self.engine_metrics.get('admission_store_bypass_total', 0)) + 1
-            return False
-        if self.bank.contains(tokens[:prefix_len]):
-            return False
-
-        prefix = tokens[:prefix_len]
-        observations = self.bank.get_observation_count(prefix)
-        frequency = self.bank.get_frequency(prefix)
-        entropy = token_entropy(prefix)
-        hint_len = self._shared_prefix_hint(tokens, metadata)
-        scaffold = hint_len is not None and prefix_len >= hint_len and self._has_scaffold_hint(tokens, metadata)
-        ms_per_token = max(self.ewma_full_ms_per_token or self.backend.estimate_prefill_cost_ms(max(prefix_len, 1)) / max(prefix_len, 1), 0.05)
-        expected_benefit = prefix_len * ms_per_token * (1.10 if scaffold else min(0.25 + frequency + 0.10 * observations, 1.0))
-        expected_cost = self.ewma_cache_reuse_overhead_ms + (0.02 * max(len(tokens) - prefix_len, 0))
-        expected_waste = expected_benefit * min(max(entropy / 16.0, 0.03), 0.35) if observations < 2 and not scaffold else expected_cost * 0.03
-        allow = scaffold or (observations >= 2 and expected_benefit - expected_cost - expected_waste >= 0.0)
-        self.engine_metrics['admission_store_total' if allow else 'admission_store_bypass_total'] = int(
-            self.engine_metrics.get('admission_store_total' if allow else 'admission_store_bypass_total', 0)
-        ) + 1
-        return allow
-
-    def _store_native_placeholder(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> None:
-        if not self._should_store_native_placeholder_with_admission(tokens, metadata):
-            return
-        super()._store_native_placeholder(tokens, metadata)
-
-    def serve_tokens(self, request_id: int, tokens: Tuple[int, ...], metadata: Dict | None = None) -> RequestResult:
-        self._observe_request(tokens, metadata)
-        match = self.bank.peek_match(tokens)
-        plan = self._plan_native_admission(tokens, match, metadata)
-        self._record_admission_plan(plan)
-
-        matched_prefix_length = 0
-        was_cache_hit = False
-        if match is not None and plan.strategy == 'exact':
-            _, entry, match_len = match
-            if self._should_attempt_cache_use(tokens, entry, match_len, metadata=metadata):
-                admitted_entry = self.bank.admit_match(match[0])
-                if admitted_entry is not None:
-                    matched_prefix_length = match_len
-                    was_cache_hit = True
-                    self.controller.update_feedback(hit=True, wasted_ratio=0.0)
-                else:
-                    self.controller.update_feedback(hit=False, wasted_ratio=0.0)
-            else:
-                self.controller.update_feedback(hit=False, wasted_ratio=0.0)
-        else:
-            self.controller.update_feedback(hit=False, wasted_ratio=0.0)
-
         out = self._prefill_full(tokens)
         self._store_native_placeholder(tokens, metadata)
         return self._record(
@@ -1493,14 +1280,13 @@ class ShadowKVPlusEngine(ShadowKVEngine):
         # fastpath is preserved as shadow_kv_plus_best_latency, and a raw
         # observer/no-store baseline is available as shadow_kv_plus_raw_observer.
         self.raw_conservative_start_enabled = self.raw_strategy in {'strict_utility_gate', 'raw_observer'}
-        self.raw_graduate_min_observations = int(CONFIG.get('policy.raw_gate.min_observations', 8))
-        self.raw_graduate_min_frequency = float(CONFIG.get('policy.raw_gate.min_frequency', 0.35))
-        self.raw_graduate_min_prefix_len = max(int(CONFIG.get('policy.raw_gate.min_prefix_len', 48)), breakeven_prefix_len())
-        self.raw_graduate_min_requests = int(CONFIG.get('policy.raw_gate.min_requests', 12))
-        self.raw_graduate_min_estimated_net_ms = float(CONFIG.get('policy.raw_gate.util_min_ms', 8.0))
-        self.semantic_index = SemanticKVIndex(dims=int(CONFIG.get('semantic.index.dims', 128)), max_entries=int(CONFIG.get('semantic.index.max_entries', 1024)))
-        self.controller = AdaptiveReuseController(min_utility_ms=CONFIG.get('policy.utility.util_min_ms', 0.0), semantic_threshold=semantic_similarity_threshold, max_layer_reuse_ratio=0.55)
-        self.semantic_sandbox = SemanticSafetySandbox()
+        self.raw_graduate_min_observations = 8
+        self.raw_graduate_min_frequency = 0.35
+        self.raw_graduate_min_prefix_len = 48
+        self.raw_graduate_min_requests = 12
+        self.raw_graduate_min_estimated_net_ms = 8.0
+        self.semantic_index = SemanticKVIndex(dims=128, max_entries=1024)
+        self.controller = AdaptiveReuseController(min_utility_ms=0.0, semantic_threshold=semantic_similarity_threshold, max_layer_reuse_ratio=0.55)
         self.allow_approximate_semantic_reuse = (getattr(backend, 'backend_name', '') == 'fake') if allow_approximate_semantic_reuse is None else bool(allow_approximate_semantic_reuse)
         self.early_layer_reuse_ratio = max(0.05, min(float(early_layer_reuse_ratio), 1.0))
         self.logit_guard_threshold = max(float(logit_guard_threshold), 0.0)
@@ -1523,16 +1309,12 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             'raw_graduate_min_frequency': self.raw_graduate_min_frequency,
             'raw_graduate_min_prefix_len': self.raw_graduate_min_prefix_len,
             'semantic_queries_skipped_total': 0,
-            'scaffold_bypass_store_successes': 0,
-            'semantic_scaffold_store_successes': 0,
             'scaffold_only_attempts': 0, 'scaffold_only_hits': 0,
             'early_layer_attempts': 0, 'early_layer_hits': 0,
             'early_layer_reuse_ratio_sum': 0.0,
             'logit_guard_checks': 0, 'logit_guard_passes': 0, 'logit_guard_failures': 0,
             'logit_guard_distance_sum': 0.0, 'logit_guard_threshold': self.logit_guard_threshold,
             'semantic_guarded_hits': 0,
-            'semantic_sandbox_checks': 0, 'semantic_sandbox_passes': 0, 'semantic_sandbox_failures': 0,
-            'semantic_sandbox_divergence_sum': 0.0,
             'semantic_quality_divergence_sum': 0.0, 'semantic_quality_divergence_events': 0,
             'layer_reuse_ratio_sum': 0.0, 'layer_reuse_events': 0,
             'policy_expected_benefit_ms': 0.0, 'policy_expected_cost_ms': 0.0, 'policy_expected_waste_ms': 0.0, 'policy_net_utility_ms': 0.0,
@@ -1561,7 +1343,7 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             return None, 0.0, 0, 0
         self.engine_metrics['semantic_queries_total'] = int(self.engine_metrics.get('semantic_queries_total', 0)) + 1
         semantic_key = str(meta.get('semantic_equivalence_key') or '') or None
-        matches = self.semantic_index.query(tokens, k=8, min_similarity=float(CONFIG.get('semantic.index.min_similarity', 0.20)), semantic_key=semantic_key)
+        matches = self.semantic_index.query(tokens, k=8, min_similarity=0.20, semantic_key=semantic_key)
         if matches:
             self.engine_metrics['semantic_matches_total'] = int(self.engine_metrics.get('semantic_matches_total', 0)) + len(matches)
         best = None
@@ -1615,11 +1397,6 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             exact_len = sem_lcp
         sample_len = max(min(len(tokens), 32), 1)
         full_mpt = self.ewma_full_ms_per_token or max(self.backend.estimate_prefill_cost_ms(sample_len) / sample_len, 0.05)
-        if exact_len > 0 and self._has_scaffold_hint(tokens, metadata):
-            full_mpt = max(
-                full_mpt,
-                float(CONFIG.get('hardware.beta_prefill_ms_per_token', getattr(self.backend, 'default_ms_per_token', 0.6))),
-            )
         plan = self.controller.plan(tokens=tokens, exact_match_len=exact_len, semantic_similarity=sem_sim, semantic_prefix_len=sem_prefix_len, shared_prefix_hint=self._shared_prefix_hint(tokens, metadata), full_ms_per_token=full_mpt, reuse_overhead_ms=self.ewma_cache_reuse_overhead_ms, metadata=metadata)
         self._current_trace_plan = {
             'policy_strategy': plan.strategy,
@@ -1634,9 +1411,6 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             'policy_confidence': float(plan.confidence),
             'policy_reason': plan.reason,
         }
-        breakdown = getattr(self.controller, 'last_breakdown', None)
-        if breakdown is not None:
-            self._current_trace_plan['policy_health'] = float(getattr(breakdown, 'health', 0.0))
         self._record_plan(plan)
         return plan, semantic_key
 
@@ -1675,44 +1449,6 @@ class ShadowKVPlusEngine(ShadowKVEngine):
         if not self.allow_approximate_semantic_reuse and self.semantic_ablation_mode == 'safe':
             self.engine_metrics['semantic_blocked_by_backend_total'] = int(self.engine_metrics.get('semantic_blocked_by_backend_total', 0)) + 1
 
-    def _should_store_scaffold_on_bypass(self, tokens: Tuple[int, ...], metadata: Dict | None = None) -> bool:
-        if not self.cache_enabled:
-            return False
-        if self._is_raw_prompt(metadata):
-            return False
-        prompt_mode = str((metadata or {}).get('prompt_mode', '')).strip().lower()
-        if prompt_mode not in {'templated', 'rag'}:
-            return False
-        hint = self._shared_prefix_hint(tokens, metadata)
-        return hint is not None and hint >= self.tuning.min_store_prefix_tokens and self._has_scaffold_hint(tokens, metadata)
-
-    def _store_scaffold_bypass_prefix(self, tokens: Tuple[int, ...], metadata: Dict | None = None, tier: str = 'cpu') -> float:
-        self.engine_metrics['store_attempts'] = int(self.engine_metrics.get('store_attempts', 0)) + 1
-        hint = self._shared_prefix_hint(tokens, metadata)
-        if hint is None or hint < self.bank.min_match_length:
-            self.engine_metrics['store_skips'] = int(self.engine_metrics.get('store_skips', 0)) + 1
-            return 0.0
-        prefix = tokens[: min(hint, self.tuning.max_cacheable_prefix_tokens)]
-        if self.bank.contains(prefix):
-            self.engine_metrics['store_skips'] = int(self.engine_metrics.get('store_skips', 0)) + 1
-            return 0.0
-        if not getattr(self.backend, 'supports_external_kv', True):
-            self.engine_metrics['store_skips'] = int(self.engine_metrics.get('store_skips', 0)) + 1
-            return 0.0
-        out = self.backend.prefill(prefix)
-        self._update_full_cost_stats(len(prefix), out.latency_ms)
-        cache_obj, move_latency_ms, memory_bytes = self._materialize_cache_for_tier(out.kv_cache, len(prefix), tier)
-        total_latency_ms = float(out.latency_ms + move_latency_ms)
-        if self.bank.store(prefix, cache_obj, total_latency_ms, memory_bytes, is_speculative=False, tier=tier):
-            self.engine_metrics['store_successes'] = int(self.engine_metrics.get('store_successes', 0)) + 1
-            self.engine_metrics['store_latency_total_ms'] = float(self.engine_metrics.get('store_latency_total_ms', 0.0)) + total_latency_ms
-            self.engine_metrics['scaffold_bypass_store_successes'] = int(self.engine_metrics.get('scaffold_bypass_store_successes', 0)) + 1
-            self.semantic_index.add(prefix, semantic_key=str((metadata or {}).get('semantic_equivalence_key') or ''))
-            self.engine_metrics['semantic_index_entries_final'] = len(self.semantic_index._rows)
-            return total_latency_ms
-        self.engine_metrics['store_skips'] = int(self.engine_metrics.get('store_skips', 0)) + 1
-        return 0.0
-
     def _store_semantic_scaffold_prefix(self, tokens: Tuple[int, ...], metadata: Dict | None = None, tier: str = 'cpu') -> float:
         """Materialize the current request scaffold for semantic ablations.
 
@@ -1735,7 +1471,6 @@ class ShadowKVPlusEngine(ShadowKVEngine):
         if self.bank.store(prefix, cache_obj, total_latency_ms, memory_bytes, is_speculative=False, tier=tier):
             self.engine_metrics['store_successes'] = int(self.engine_metrics.get('store_successes', 0)) + 1
             self.engine_metrics['store_latency_total_ms'] = float(self.engine_metrics.get('store_latency_total_ms', 0.0)) + total_latency_ms
-            self.engine_metrics['semantic_scaffold_store_successes'] = int(self.engine_metrics.get('semantic_scaffold_store_successes', 0)) + 1
             self.semantic_index.add(prefix, semantic_key=str((metadata or {}).get('semantic_equivalence_key') or ''))
             self.engine_metrics['semantic_index_entries_final'] = len(self.semantic_index._rows)
             return total_latency_ms
@@ -1770,8 +1505,6 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             return None
 
         mode = self.semantic_ablation_mode
-        sandbox_allowed = False
-        sandbox_divergence = None
         if mode == 'scaffold_only':
             self.engine_metrics['scaffold_only_attempts'] = int(self.engine_metrics.get('scaffold_only_attempts', 0)) + 1
         elif mode == 'early_layer':
@@ -1796,31 +1529,17 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             reusable = min(plan.reusable_prefix_tokens, len(semantic_key), len(tokens))
         else:
             if not self.allow_approximate_semantic_reuse:
-                self.engine_metrics['semantic_sandbox_checks'] = int(self.engine_metrics.get('semantic_sandbox_checks', 0)) + 1
-                sandbox = self.semantic_sandbox.validate(self.backend, tokens, semantic_key, plan)
-                sandbox_allowed = bool(sandbox.allowed)
-                sandbox_divergence = sandbox.divergence
-                self.engine_metrics['semantic_sandbox_passes' if sandbox_allowed else 'semantic_sandbox_failures'] = int(self.engine_metrics.get('semantic_sandbox_passes' if sandbox_allowed else 'semantic_sandbox_failures', 0)) + 1
-                if sandbox_divergence is not None:
-                    self.engine_metrics['semantic_sandbox_divergence_sum'] = float(self.engine_metrics.get('semantic_sandbox_divergence_sum', 0.0)) + float(sandbox_divergence)
-                if self._current_trace_plan is not None:
-                    self._current_trace_plan['semantic_sandbox_allowed'] = sandbox_allowed
-                    self._current_trace_plan['semantic_sandbox_divergence'] = sandbox_divergence
-                    self._current_trace_plan['semantic_sandbox_reason'] = sandbox.reason
-                if not sandbox_allowed:
-                    return None
+                return None
             reusable = min(plan.reusable_prefix_tokens, len(semantic_key), len(tokens))
 
         if reusable < self.bank.min_match_length:
             return None
-        if mode not in {'logit_guard'} and not (self.allow_approximate_semantic_reuse or sandbox_allowed) and getattr(self.backend, 'backend_name', '') != 'fake':
+        if mode not in {'logit_guard'} and not self.allow_approximate_semantic_reuse and getattr(self.backend, 'backend_name', '') != 'fake':
             return None
 
         out = self.backend.prefill(tokens[reusable:], past_key_values=entry.kv_cache)
         semantic_similarity = float((self._current_semantic_match or {}).get('semantic_similarity') or 0.0)
         divergence = self._quality_divergence_proxy(semantic_similarity, plan.layer_reuse_ratio if mode != 'early_layer' else self.early_layer_reuse_ratio)
-        if sandbox_divergence is not None:
-            divergence = max(divergence, float(sandbox_divergence))
         self.engine_metrics['semantic_quality_divergence_sum'] = float(self.engine_metrics.get('semantic_quality_divergence_sum', 0.0)) + divergence
         self.engine_metrics['semantic_quality_divergence_events'] = int(self.engine_metrics.get('semantic_quality_divergence_events', 0)) + 1
         self.engine_metrics['semantic_partial_hits'] = int(self.engine_metrics.get('semantic_partial_hits', 0)) + 1
@@ -1882,8 +1601,8 @@ class ShadowKVPlusEngine(ShadowKVEngine):
             if obs > best_obs or (obs == best_obs and (freq > best_freq or length > best_len)):
                 best_obs, best_freq, best_len = obs, freq, length
 
-        ms_per_token = max(float(self.ewma_full_ms_per_token or CONFIG.get('hardware.beta_prefill_ms_per_token', getattr(self.backend, 'default_ms_per_token', 0.6))), 0.05)
-        overhead = max(float(self.ewma_cache_reuse_overhead_ms or CONFIG.get('hardware.reuse_fixed_overhead_ms', getattr(self.backend, 'default_cache_reuse_overhead_ms', 2.0))), 0.0)
+        ms_per_token = max(float(self.ewma_full_ms_per_token or getattr(self.backend, 'default_ms_per_token', 0.6)), 0.05)
+        overhead = max(float(self.ewma_cache_reuse_overhead_ms or getattr(self.backend, 'default_cache_reuse_overhead_ms', 2.0)), 0.0)
         estimated_net_ms = best_len * ms_per_token - overhead
         strong = (
             best_obs >= self.raw_graduate_min_observations
@@ -1952,11 +1671,9 @@ class ShadowKVPlusEngine(ShadowKVEngine):
                 store_latency_ms = 0.0
                 if self.semantic_ablation_mode in {'scaffold_only', 'early_layer', 'logit_guard'}:
                     store_latency_ms = self._store_semantic_scaffold_prefix(tokens, metadata=metadata, tier='cpu')
-                elif self._should_store_scaffold_on_bypass(tokens, metadata):
-                    store_latency_ms = self._store_scaffold_bypass_prefix(tokens, metadata=metadata, tier='cpu')
-                # Raw bypass remains no-store. Templated/RAG scaffolds are
-                # materialized once so future requests can present exact matches
-                # to the controller instead of staying permanently cold.
+                # Bypass means the policy found no positive utility; do not add
+                # reactive store cost on the same request unless an explicit
+                # semantic ablation needs scaffold materialization.
                 self.controller.update_feedback(hit=False, wasted_ratio=0.0)
                 return self._record(RequestResult(request_id, out.latency_ms + store_latency_ms, 0, len(tokens), False, False, gpu_utilization_pct=out.gpu_utilization_pct))
             if match is None and plan.strategy == 'semantic_partial' and semantic_key is not None:

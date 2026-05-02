@@ -1,0 +1,62 @@
+{
+  "description": "Canonical 3-seed ShadowKV++ hardware result bundle for GitHub release.",
+  "benchmark_files": 898,
+  "engine_rows": 8532,
+  "hardware_file_counts": {
+    "p100": 450,
+    "t4": 448
+  },
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "modes": {
+    "raw": 300,
+    "semantic": 300,
+    "templated": 298
+  },
+  "models": {
+    "google/gemma-2b-it": 180,
+    "gpt2": 180,
+    "microsoft/Phi-3-mini-4k-instruct": 178,
+    "Qwen/Qwen2.5-1.5B-Instruct": 180,
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0": 180
+  },
+  "datasets": {
+    "ag_news": 90,
+    "alpaca_eval": 90,
+    "banking77": 90,
+    "cnn_dailymail": 90,
+    "daily_dialog": 90,
+    "dolly": 90,
+    "oasst1": 90,
+    "samsum": 88,
+    "ultrachat": 90,
+    "xsum": 90
+  },
+  "engines": {
+    "no_cache": 898,
+    "reactive_prefix_cache": 898,
+    "greedy_prefix_cache": 898,
+    "strict_reactive_prefix_cache": 898,
+    "frequency_speculative": 898,
+    "shadow_kv": 898,
+    "shadow_kv_plus": 898,
+    "shadow_kv_plus_best_latency": 898,
+    "shadow_kv_plus_raw_observer": 898,
+    "shadow_kv_plus_scaffold_only": 150,
+    "shadow_kv_plus_early_layer": 150,
+    "shadow_kv_plus_logit_guard": 150
+  },
+  "result_roots": [
+    "results/final_p100",
+    "results/final_t4"
+  ],
+  "notes": [
+    "This release includes the two canonical 3-seed hardware result trees only.",
+    "Seeds are 42, 123, and 456.",
+    "T4 has 448 benchmark files because two Phi-3 templated runs were unavailable in the source result bundle.",
+    "The 5-seed N=512 result archive is intentionally not included in this GitHub-ready folder to keep the release focused on the two main hardware result sets."
+  ]
+}

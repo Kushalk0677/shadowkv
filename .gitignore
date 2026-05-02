@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.whl
+
+# Local scratch outputs
+tmp*/
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Keep canonical result JSONs, but avoid accidental large local dumps.
+results/**/policy_trace.jsonl
+results/**/decision_log.jsonl

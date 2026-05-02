@@ -3,18 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-import argparse
-import json
 from typing import Dict, Iterable, List, Tuple
-
-try:
-    from .config_loader import CONFIG
-except ImportError:
-    class _FallbackConfig:
-        def get(self, dotted_path: str, default=None):
-            return default
-
-    CONFIG = _FallbackConfig()
 
 
 @dataclass
@@ -126,7 +115,7 @@ class SemanticKVIndex:
                 # scaffolds that express the same serving task with different
                 # surface forms. The boost exposes semantic opportunity without
                 # requiring an encoder dependency in the hot path.
-                sim = max(sim, float(CONFIG.get('semantic.index.equivalence_key_boost', 0.92)))
+                sim = max(sim, 0.92)
             if sim < min_similarity:
                 continue
             matches.append(
@@ -140,39 +129,3 @@ class SemanticKVIndex:
             )
         matches.sort(key=lambda m: (m.similarity, m.observations, m.prefix_len), reverse=True)
         return matches[:k]
-
-    def diagnostics(self) -> Dict:
-        family_counts: Dict[str, int] = {}
-        total_prefix_tokens = 0
-        total_observations = 0
-        for prefix, row in self._rows.items():
-            family = str(row.get('semantic_key') or '<none>')
-            family_counts[family] = family_counts.get(family, 0) + 1
-            total_prefix_tokens += len(prefix)
-            total_observations += int(row.get('observations', 0))
-        vector_bytes = len(self._rows) * self.sketcher.dims * 8
-        token_bytes = total_prefix_tokens * 8
-        return {
-            'entries': len(self._rows),
-            'max_entries': int(self.max_entries),
-            'dims': int(self.sketcher.dims),
-            'families': len(family_counts),
-            'family_counts': family_counts,
-            'total_prefix_tokens': total_prefix_tokens,
-            'total_observations': total_observations,
-            'approx_memory_bytes': int(vector_bytes + token_bytes),
-            'approx_vector_bytes': int(vector_bytes),
-            'approx_token_bytes': int(token_bytes),
-        }
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description='Print SemanticKVIndex diagnostic schema.')
-    parser.add_argument('--empty', action='store_true', help='Emit diagnostics for an empty index.')
-    args = parser.parse_args()
-    index = SemanticKVIndex()
-    print(json.dumps(index.diagnostics(), indent=2, sort_keys=True))
-
-
-if __name__ == '__main__':
-    main()

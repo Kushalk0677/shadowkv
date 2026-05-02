@@ -17,12 +17,6 @@ ENGINE_KEYS = {
     'frequency_speculative',
     'shadow_kv',
     'shadow_kv_plus',
-    'vllm_apc',
-    'vllm_apc_shadowkv_plus',
-    'sglang_radix_attention',
-    'sglang_radix_attention_shadowkv_plus',
-    'lmcache',
-    'lmcache_shadowkv_plus',
 }
 
 
