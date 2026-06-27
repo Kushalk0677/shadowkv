@@ -267,6 +267,24 @@ done
 
 The exact latency values will vary by GPU, driver, PyTorch, Transformers version, and Hugging Face dataset/model cache state.
 
+## Real-World Runtime Experiments
+
+This repository includes real-world runtime benchmark results in
+[`runtime_experiments/`](runtime_experiments/). ShadowKV++ was evaluated on
+production LLM serving systems (SGLang, LMCache, vLLM) on **NVIDIA RTX 6000 Ada**
+GPUs with **Qwen2.5 family models (1.5B–32B)** across **all ten datasets**.
+
+**Key results:**
+
+| Finding | Value |
+|---------|-------|
+| ShadowKV++ vs LMCache at 7B | +16.7% |
+| ShadowKV++ at 32B over LMCache | +5.1% |
+| vLLM APC+ShadowKV++ vs no-cache at 32B | +19.0% |
+| GPU energy saving (vLLM at 32B) | ~25% |
+
+See [`runtime_experiments/`](runtime_experiments/) for complete results.
+
 ## Important Correctness Boundary
 
 Exact-prefix KV reuse is semantics-preserving under causal attention. Approximate semantic KV reuse is not generally correctness-preserving.
