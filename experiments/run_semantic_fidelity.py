@@ -32,13 +32,13 @@ P100_MODELS = {
 
 DATASETS = {
     'samsum': ('knkarthick/samsum', 'train', 'dialogue'),
-    'xsum': ('xsum', 'train', 'document'),
-    'cnn_dailymail': ('cnn_dailymail', 'train', 'article'),
-    'ag_news': ('ag_news', 'train', 'text'),
+    'xsum': ('xsum', 'xsum', 'train', 'document'),
+    'cnn_dailymail': ('cnn_dailymail', 'cnn_dailymail', 'train', 'article'),
+    'ag_news': ('ag_news', 'ag_news', 'train', 'text'),
     'banking77': ('mteb/banking77', 'train', 'text'),
-    'alpaca_eval': ('tatsu-lab/alpaca_eval', 'train', 'instruction'),
+    'alpaca_eval': ('Thanmay/alpaca_eval', 'eval', 'instruction'),
     'dolly': ('databricks/databricks-dolly-15k', 'train', 'instruction'),
-    'daily_dialog': ('daily_dialog', 'train', 'dialog'),
+    'daily_dialog': ('DeepPavlov/daily_dialog', 'train', 'dialog'),
     'oasst1': ('OpenAssistant/oasst1', 'train', 'text'),
     'ultrachat': ('HuggingFaceH4/ultrachat_200k', 'train_sft', 'messages'),
 }
@@ -125,7 +125,14 @@ def run_fidelity_experiment(args):
 
             try:
                 from datasets import load_dataset
-                ds = load_dataset(ds_info[0], split=ds_info[1])
+                # Handle both 3-tuple (name, split, field) and 4-tuple (name, subname, split, field)
+                ds_name = ds_info[0]
+                if len(ds_info) == 4:
+                    ds = load_dataset(ds_name, ds_info[1], split=ds_info[2], trust_remote_code=True)
+                    field_idx = 3
+                else:
+                    ds = load_dataset(ds_name, split=ds_info[1], trust_remote_code=True)
+                    field_idx = 2
                 # Get samples — handle different dataset formats
                 samples = []
                 for i in range(min(NUM_SAMPLES, len(ds))):
@@ -140,7 +147,7 @@ def run_fidelity_experiment(args):
                     elif ds_key in ('alpaca_eval', 'dolly'):
                         text = str(row.get('instruction', ''))
                     else:
-                        text = str(row[ds_info[2]])
+                        text = str(row[ds_info[field_idx]])
                     if text and len(text) > 20:
                         samples.append(text[:512])  # truncate to 512 chars
             except Exception as e:
