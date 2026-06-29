@@ -124,10 +124,32 @@ def run_fidelity_experiment(args):
             print(f'\n=== {model_key} on {ds_key} ===')
 
             try:
-                from datasets import load_dataset
+                from datasets import load_dataset, __version__ as datasets_version
+                import packaging.version
+                dv = packaging.version.parse(datasets_version)
+                
                 # Handle both 3-tuple (name, split, field) and 4-tuple (name, subname, split, field)
                 ds_name = ds_info[0]
-                if len(ds_info) == 4:
+                
+                # Parquet-based datasets work on all versions
+                # Script-based datasets (xsum, cnn_dailymail, ag_news) need v2 with trust_remote_code
+                script_based = ds_key in ('xsum', 'cnn_dailymail', 'ag_news')
+                
+                if script_based and dv.major >= 3:
+                    # datasets v3+ broke script-based datasets. Load from parquet mirror.
+                    parquet_mirrors = {
+                        'xsum': ('xsum', 'xsum', 'train', 'document'),
+                        'cnn_dailymail': ('cnn_dailymail', '3.0.0', 'train', 'article'),
+                        'ag_news': ('fancyzhx/ag_news', 'train', 'text'),
+                    }
+                    new_info = parquet_mirrors[ds_key]
+                    if len(new_info) == 4:
+                        ds = load_dataset(new_info[0], new_info[1], split=new_info[2])
+                        field_idx = 3
+                    else:
+                        ds = load_dataset(new_info[0], split=new_info[1])
+                        field_idx = 2
+                elif len(ds_info) == 4:
                     ds = load_dataset(ds_name, ds_info[1], split=ds_info[2], trust_remote_code=True)
                     field_idx = 3
                 else:
