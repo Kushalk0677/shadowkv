@@ -1,101 +1,33 @@
 #!/usr/bin/env python3
 """
-Direction 1: Semantic Fidelity — Proper Equivalence-Key Method.
+Semantic Fidelity — Fixed KV Cache Reuse using DynamicCache API.
 
-Uses the paper's SEMANTIC_PARAPHRASE_TEMPLATES to compare outputs between
-semantically equivalent but token-different instruction variants.
-This is the correct methodology for measuring semantic KV reuse fidelity.
+Key fix: Work with token arrays directly to avoid tokenizer decode/encode
+roundtrip issues that corrupt the shared prefix alignment.
 """
-
-import argparse, json, os, sys, time, warnings
+import argparse, json, os, sys, time, random, warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
 from pathlib import Path
-from typing import List, Tuple, Dict
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Models (same as the paper's HF evaluation)
 MODELS = {
     'tinyllama': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
     'qwen25_15b': 'Qwen/Qwen2.5-1.5B-Instruct',
     'gemma2b': 'google/gemma-2b-it',
 }
 
-# Dataset → HF name → split → field → dataset_type (for template lookup)
-# Format: (name, split, field, dataset_type) for parquet-based
-#         (name, subname, split, field, dataset_type) for script-based
 DATASETS = {
-    'samsum': ('knkarthick/samsum', 'train', 'dialogue', 'dialogue_summary'),
-    'xsum': ('xsum', 'xsum', 'train', 'document', 'summarization'),
-    'ag_news': ('fancyzhx/ag_news', 'train', 'text', 'classification'),
-    'banking77': ('mteb/banking77', 'train', 'text', 'classification'),
-    'alpaca_eval': ('Thanmay/alpaca_eval', 'eval', 'instruction', 'instruction'),
-    'dolly': ('databricks/databricks-dolly-15k', 'train', 'instruction', 'instruction'),
-    'daily_dialog': ('DeepPavlov/daily_dialog', 'train', 'dialog', 'dialogue_summary'),
-    'oasst1': ('OpenAssistant/oasst1', 'train', 'text', 'oasst'),
-    'ultrachat': ('HuggingFaceH4/ultrachat_200k', 'train_sft', 'messages', 'chat_messages'),
+    'samsum': ('knkarthick/samsum', 'train', 'dialogue'),
+    'xsum': ('xsum', 'xsum', 'train', 'document'),
+    'ag_news': ('fancyzhx/ag_news', 'train', 'text'),
+    'banking77': ('mteb/banking77', 'train', 'text'),
+    'alpaca_eval': ('Thanmay/alpaca_eval', 'eval', 'instruction'),
+    'dolly': ('databricks/databricks-dolly-15k', 'train', 'instruction'),
 }
 
-# The paper's semantic paraphrase templates (4 variants each)
-SEMANTIC_PARAPHRASE_TEMPLATES = {
-    'dialogue_summary': (
-        'System: Condense the following conversation into a factual one or two sentence recap. Preserve speaker intent and outcome.\nConversation payload:\n',
-        'Instruction: Read the dialogue and write a compact neutral summary. Keep only the goal, action, and resolution.\nDialogue input:\n',
-        'Role: Dialogue summarizer. Ignore greetings and filler, then summarize the exchange faithfully in brief.\nTranscript:\n',
-        'Task brief: Create a concise summary of this multi-turn dialogue without adding facts.\nRequest body:\n',
-    ),
-    'instruction': (
-        'System: Follow the user instruction and provide a concise helpful answer based only on supplied context.\nRequest:\n',
-        'Instruction-following task: identify what is being asked and answer directly, avoiding invented details.\nPayload:\n',
-        'Assistant policy: be useful, brief, and faithful to the instruction and context below.\nInput:\n',
-        'Task: produce a short operationally useful response to the following instruction.\nUser material:\n',
-    ),
-    'classification': (
-        'System: Classify the item by its dominant intent or topic and output the most likely label.\nItem payload:\n',
-        'Classification task: identify the category that best matches the following text.\nText:\n',
-        'Decision brief: read the item, ignore incidental wording, and emit one category.\nInput item:\n',
-        'Task: choose the strongest topic or intent label for the text below.\nRequest body:\n',
-    ),
-    'oasst': (
-        'System: Continue the conversation helpfully and safely while preserving the user intent and language.\nConversation item:\n',
-        'Assistant continuation task: respond naturally, safely, and concisely to the message below.\nMessage payload:\n',
-        'Safety-aware chat brief: infer the next helpful assistant turn from the supplied text.\nConversation payload:\n',
-        'Task: produce a safe compact assistant reply that follows the conversation context.\nInput:\n',
-    ),
-    'chat_messages': (
-        'System: Read the chat transcript and produce the next helpful assistant turn.\nTranscript payload:\n',
-        'Chat continuation instruction: preserve topic continuity and answer the last user need.\nConversation:\n',
-        'Assistant role: continue this dialogue naturally, grounded only in the provided messages.\nMessages:\n',
-        'Task brief: infer and write the next concise helpful chat response.\nDialogue:\n',
-    ),
-    'summarization': (
-        'System: Summarize the document in one factual sentence focused on the main event.\nDocument payload:\n',
-        'News summary task: extract the central event and produce a compact factual summary.\nArticle:\n',
-        'Editorial brief: preserve core facts, avoid speculation, and write a short summary.\nSource text:\n',
-        'Task: read the article and return a concise factual synopsis.\nInput document:\n',
-    ),
-    'generic': (
-        'System: Answer the following request concisely and faithfully.\nPayload:\n',
-        'Assistant task: read the request and respond directly.\nInput:\n',
-        'Instruction: provide a brief grounded answer to the material below.\nRequest:\n',
-        'Task brief: produce a useful concise response.\nBody:\n',
-    ),
-}
 
-MAX_GEN_TOKENS = 64
-NUM_SAMPLES = 32
-
-# Map dataset key to dataset_type for template lookup
-DATASET_TYPE = {}
-for k, v in DATASETS.items():
-    DATASET_TYPE[k] = v[-1]
-
-
-def load_model(model_name: str, device: str):
+def load_model(model_name, device):
     print(f'Loading {model_name} on {device}...')
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -107,152 +39,199 @@ def load_model(model_name: str, device: str):
     return model, tokenizer
 
 
-def generate_text(model, tokenizer, prompt: str, device: str, max_new: int = MAX_GEN_TOKENS) -> str:
-    """Generate text from a prompt using greedy decoding."""
-    inputs = tokenizer(prompt, return_tensors='pt', truncation=True, max_length=512).to(device)
+def generate_standard(model, input_ids, max_new):
+    """Standard greedy generation. Returns only the newly generated tokens."""
     with torch.no_grad():
-        output = model.generate(
-            input_ids=inputs['input_ids'],
-            max_new_tokens=max_new,
-            do_sample=False,
-            temperature=None,
-            top_p=None,
-            pad_token_id=tokenizer.pad_token_id,
+        out = model.generate(
+            input_ids=input_ids, max_new_tokens=max_new,
+            do_sample=False, temperature=None, top_p=None,
+            pad_token_id=model.config.pad_token_id or 0,
         )
-    generated = output[0][inputs['input_ids'].shape[1]:]
-    return tokenizer.decode(generated, skip_special_tokens=True)
+    # Slice out prompt tokens
+    return out[0][input_ids.shape[1]:]
 
 
-def get_field_idx(ds_key: str) -> int:
-    """Get the field index from the DATASETS tuple (3 for 5-tuples, 2 for 4-tuples)."""
-    return 3 if len(DATASETS[ds_key]) >= 5 else 2
+def generate_with_reuse(model, prompt_ids_orig, prompt_ids_mod, shared, max_new, eos_id):
+    """
+    Generate from prompt_mod, reusing prompt_orig's DynamicCache for shared prefix.
+    Returns token IDs (not decoded text).
+    """
+    shared = min(shared, len(prompt_ids_orig[0]), len(prompt_ids_mod[0]))
 
+    # 1. Prefill original
+    with torch.no_grad():
+        out = model(prompt_ids_orig, use_cache=True)
+    cache = out.past_key_values
 
-def extract_payload(row, ds_key: str) -> str:
-    """Extract the payload text from a dataset row, handling different formats."""
-    if ds_key == 'daily_dialog':
-        dialog = row.get('dialog', [])
-        return ' '.join(dialog) if isinstance(dialog, list) else str(dialog)
-    elif ds_key == 'ultrachat':
-        msgs = row.get('messages', [])
-        texts = [m.get('content', '') for m in msgs if isinstance(m, dict)]
-        return ' '.join(texts)
-    elif ds_key in ('alpaca_eval', 'dolly'):
-        return str(row.get('instruction', ''))
-    elif ds_key == 'oasst1':
-        return str(row.get('text', ''))
+    # 2. Crop to shared prefix
+    cache.crop(shared)
+
+    # 3. Prefill modified suffix on cropped cache
+    suffix = prompt_ids_mod[:, shared:]
+    if suffix.shape[1] > 0:
+        with torch.no_grad():
+            out = model(suffix, past_key_values=cache, use_cache=True)
+        combined_cache = out.past_key_values
+        total_pos = shared + suffix.shape[1]
+        start_tok = suffix[:, -1:]
     else:
-        return str(row[DATASETS[ds_key][get_field_idx(ds_key)]])
+        combined_cache = cache
+        total_pos = shared
+        start_tok = prompt_ids_orig[:, shared - 1:shared]
+
+    if total_pos < 1:
+        return generate_standard(model, prompt_ids_mod, max_new)
+
+    # 4. Crop combined cache to exclude the last token (it will be passed as input)
+    kv = combined_cache
+    kv.crop(total_pos - 1)  # KV for positions 0..total_pos-2
+    inp = start_tok           # the token at position total_pos-1
+
+    # 5. Generate token-by-token
+    gen_ids = []
+
+    for _ in range(max_new):
+        with torch.no_grad():
+            outs = model(input_ids=inp, past_key_values=kv, use_cache=True)
+        nid = outs.logits[0, -1].argmax(-1, keepdim=True).unsqueeze(0)
+        inp = nid
+        kv = outs.past_key_values
+        gen_ids.append(nid.item())
+        if nid.item() == eos_id:
+            break
+
+    return torch.tensor(gen_ids)
 
 
-def run_fidelity_experiment(args):
-    device = args.device
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+def make_shuffled_ids(ids, ratio=0.75):
+    """Shuffle last (1-ratio) tokens, returns (modified_ids, shared_count)."""
+    split = int(len(ids) * ratio)
+    # Ensure at least 4 tokens in suffix for meaningful shuffle
+    if len(ids) - split < 4:
+        split = len(ids) - 4
+    if split < 4:
+        return ids, len(ids)
+    prefix = ids[:split]
+    suffix = ids[split:]
+    shuffled = suffix.copy()
+    random.shuffle(shuffled)
+    return prefix + shuffled, split
+
+
+def extract(row, key):
+    if key in ('alpaca_eval', 'dolly'):
+        return str(row.get('instruction', ''))
+    elif key == 'samsum':
+        return str(row.get('dialogue', ''))
+    elif key == 'xsum':
+        return str(row.get('document', ''))
+    elif key in ('ag_news', 'banking77'):
+        return str(row.get('text', ''))
+    return str(row.get(list(row.keys())[0], ''))
+
+
+def run_single_ratio(mk, model, tok, dk, samples, ratio, max_gen_tokens, device):
+    """Run fidelity experiment at a specific shared-prefix ratio."""
+    eos_id = tok.eos_token_id or 0
+    results = []
+    for idx, payload in enumerate(samples):
+        ids_1d = tok.encode(payload, truncation=True, max_length=384)
+        if len(ids_1d) < 16:
+            continue
+        ids_mod_1d, shared = make_shuffled_ids(ids_1d, ratio=ratio)
+        ids_orig = torch.tensor([ids_1d], device=device)
+        ids_mod = torch.tensor([ids_mod_1d], device=device)
+
+        exact_ids = generate_standard(model, ids_orig, max_gen_tokens)
+        exact_text = tok.decode(exact_ids, skip_special_tokens=True)
+
+        ref_ids = generate_standard(model, ids_mod, max_gen_tokens)
+        ref_text = tok.decode(ref_ids, skip_special_tokens=True)
+
+        reuse_ids = generate_with_reuse(model, ids_orig, ids_mod, shared,
+                                         max_gen_tokens, eos_id)
+        reuse_text = tok.decode(reuse_ids, skip_special_tokens=True)
+
+        results.append({
+            'model': mk, 'dataset': dk, 'sample_idx': idx,
+            'shared_ratio': ratio,
+            'shared_tokens': shared,
+            'total_tokens_orig': len(ids_1d),
+            'total_tokens_mod': len(ids_mod_1d),
+            'exact_text': exact_text,
+            'ref_text': ref_text,
+            'reuse_text': reuse_text,
+        })
+        if (idx + 1) % 5 == 0:
+            print(f'  [{idx+1}/{len(samples)}] ratio={ratio}')
+    return results
+
+
+def run(args):
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     all_results = []
+    random.seed(42)
 
-    for model_key in args.models:
-        model_name = MODELS[model_key]
-        model, tokenizer = load_model(model_name, device)
+    device = args.device
 
-        for ds_key in args.datasets:
-            ds_info = DATASETS[ds_key]
-            ds_name = ds_info[0]
-            ds_type = DATASET_TYPE[ds_key]
-            templates = SEMANTIC_PARAPHRASE_TEMPLATES.get(ds_type, SEMANTIC_PARAPHRASE_TEMPLATES['generic'])
-            n_variants = len(templates)
+    for mk in args.models:
+        model, tok = load_model(MODELS[mk], device)
 
-            print(f'\n=== {model_key} on {ds_key} ({ds_type}, {n_variants} variants) ===')
-
-            # Load dataset with error handling for all formats
+        for dk in args.datasets:
+            print(f'\n=== {mk} on {dk} ===')
             samples = []
             try:
                 from datasets import load_dataset
-                if ds_key in ('xsum',):
-                    from huggingface_hub import hf_hub_download
-                    import pyarrow.parquet as pq
-                    pp = hf_hub_download(repo_id='xsum', filename='data/train-00000-of-00001.parquet', repo_type='dataset')
-                    table = pq.read_table(pp)
-                    for i in range(min(NUM_SAMPLES, len(table))):
-                        text = str(table.column('document')[i].as_py() or '')
-                        if len(text) > 20:
-                            samples.append(text[:512])
+                info = DATASETS[dk]
+                if len(info) == 4:
+                    ds = load_dataset(info[0], info[1], split=info[2], trust_remote_code=True)
                 else:
-                    # Try loading; if trust_remote_code warning appears it's harmless for parquet datasets
-                    ds_args = [ds_name]
-                    split_name = ds_info[2] if len(ds_info) >= 5 else ds_info[1]
-                    if len(ds_info) >= 5:
-                        ds_args.append(ds_info[1])
-                    ds = load_dataset(*ds_args, split=split_name, trust_remote_code=True)
-                    for i in range(min(NUM_SAMPLES, len(ds))):
-                        payload = extract_payload(ds[i], ds_key)
-                        if len(payload) > 20:
-                            samples.append(payload[:512])
+                    ds = load_dataset(info[0], split=info[1], trust_remote_code=True)
+                for i in range(min(args.n_samples, len(ds))):
+                    t = extract(ds[i], dk)
+                    if len(t) > 20:
+                        samples.append(t[:512])
             except Exception as e:
-                print(f'  Could not load dataset: {e}')
+                print(f'  Dataset error: {e}')
                 continue
-
-            print(f'  Loaded {len(samples)} samples')
+            print(f'  {len(samples)} samples')
             if not samples:
                 continue
 
-            # For each sample, generate with variant A (exact) and variant B (semantic)
             for idx, payload in enumerate(samples):
-                variant_a = 0  # first variant = exact prefix
-                variant_b = (idx % (n_variants - 1)) + 1  # cycle through variants 1,2,3
+                # Tokenize original once
+                ids_1d = tok.encode(payload, truncation=True, max_length=384)
+                if len(ids_1d) < 16:
+                    continue  # too short
 
-                prompt_a = templates[variant_a] + payload
-                prompt_b = templates[variant_b] + payload
+                for ratio in args.ratios:
+                    chunk = run_single_ratio(mk, model, tok, dk, [payload],
+                                             ratio, args.max_gen_tokens, device)
+                    all_results.extend(chunk)
 
-                try:
-                    text_a = generate_text(model, tokenizer, prompt_a, device, args.max_gen_tokens)
-                    time.sleep(0.01)  # tiny cooldown
-                    text_b = generate_text(model, tokenizer, prompt_b, device, args.max_gen_tokens)
-                except Exception as e:
-                    print(f'  Error on sample {idx}: {e}')
-                    continue
-
-                all_results.append({
-                    'model': model_key,
-                    'dataset': ds_key,
-                    'sample_idx': idx,
-                    'variant_a': variant_a,
-                    'variant_b': variant_b,
-                    'exact_text': text_a,
-                    'approx_text': text_b,
-                    'exact_len': len(text_a.split()),
-                    'approx_len': len(text_b.split()),
-                })
-
-                if (idx + 1) % 10 == 0:
-                    print(f'  Processed {idx+1}/{len(samples)}')
-
-        # Save per-model results
-        model_out = output_dir / f'{model_key}_equiv_results.json'
-        model_results = [r for r in all_results if r['model'] == model_key]
-        with open(model_out, 'w') as f:
-            json.dump(model_results, f, indent=2)
-        print(f'Saved {len(model_results)} results to {model_out}')
-
-        del model, tokenizer
+        path = out_dir / f'{mk}_results.json'
+        with open(path, 'w') as f:
+            json.dump([r for r in all_results if r['model'] == mk], f, indent=2)
+        print(f'Saved -> {path}')
+        del model, tok
         if device.startswith('cuda'):
             torch.cuda.empty_cache()
 
-    # Save all results
-    all_out = output_dir / 'all_results.json'
-    with open(all_out, 'w') as f:
+    path = out_dir / 'all_results.json'
+    with open(path, 'w') as f:
         json.dump(all_results, f, indent=2)
-    print(f'\nTotal: {len(all_results)} results saved to {all_out}')
+    print(f'Total: {len(all_results)} -> {path}')
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Semantic Fidelity — Equivalence-Key Method')
-    parser.add_argument('--device', default='cuda:0')
-    parser.add_argument('--models', nargs='+', default=['tinyllama'], choices=MODELS.keys())
-    parser.add_argument('--datasets', nargs='+', default=['samsum', 'alpaca_eval', 'banking77'],
-                       choices=DATASETS.keys())
-    parser.add_argument('--n_samples', type=int, default=32)
-    parser.add_argument('--max_gen_tokens', type=int, default=64)
-    parser.add_argument('--output_dir', default='fidelity_equiv_results')
-    args = parser.parse_args()
-    run_fidelity_experiment(args)
+    p = argparse.ArgumentParser()
+    p.add_argument('--device', default='cuda:0')
+    p.add_argument('--models', nargs='+', default=['tinyllama'], choices=MODELS.keys())
+    p.add_argument('--datasets', nargs='+', default=['samsum'], choices=DATASETS.keys())
+    p.add_argument('--n_samples', type=int, default=16)
+    p.add_argument('--max_gen_tokens', type=int, default=64)
+    p.add_argument('--ratios', nargs='+', type=float, default=[0.75])
+    p.add_argument('--output_dir', default='fidelity_equiv_results')
+    args = p.parse_args()
+    run(args)
