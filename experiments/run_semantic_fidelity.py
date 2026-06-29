@@ -124,54 +124,59 @@ def run_fidelity_experiment(args):
             print(f'\n=== {model_key} on {ds_key} ===')
 
             try:
-                from datasets import load_dataset, __version__ as datasets_version
-                import packaging.version
-                dv = packaging.version.parse(datasets_version)
+                from datasets import load_dataset
                 
-                # Handle both 3-tuple (name, split, field) and 4-tuple (name, subname, split, field)
-                ds_name = ds_info[0]
-                
-                # Parquet-based datasets work on all versions
-                # Script-based datasets (xsum, cnn_dailymail, ag_news) need v2 with trust_remote_code
+                # Script-based datasets need special handling across datasets versions
                 script_based = ds_key in ('xsum', 'cnn_dailymail', 'ag_news')
                 
-                if script_based and dv.major >= 3:
-                    # datasets v3+ broke script-based datasets. Load from parquet mirror.
-                    parquet_mirrors = {
-                        'xsum': ('xsum', 'xsum', 'train', 'document'),
-                        'cnn_dailymail': ('cnn_dailymail', '3.0.0', 'train', 'article'),
-                        'ag_news': ('fancyzhx/ag_news', 'train', 'text'),
+                if script_based:
+                    # Load via huggingface_hub directly (works on ALL datasets versions)
+                    from huggingface_hub import hf_hub_download
+                    import pandas as pd
+                    import pyarrow.parquet as pq
+                    
+                    hub_paths = {
+                        'xsum': ('xsum', 'data/train-00000-of-00001.parquet', 'document'),
+                        'cnn_dailymail': ('cnn_dailymail', 'data/train-00000-of-00001.parquet', 'article'),
+                        'ag_news': ('fancyzhx/ag_news', 'data/train-00000-of-00001.parquet', 'text'),
                     }
-                    new_info = parquet_mirrors[ds_key]
-                    if len(new_info) == 4:
-                        ds = load_dataset(new_info[0], new_info[1], split=new_info[2])
+                    repo_id, parquet_file, field = hub_paths[ds_key]
+                    parquet_path = hf_hub_download(repo_id=repo_id, filename=parquet_file, repo_type='dataset')
+                    table = pq.read_table(parquet_path)
+                    samples = []
+                    for i in range(min(NUM_SAMPLES, len(table))):
+                        text = str(table.column(field)[i].as_py() or '')
+                        if len(text) > 20:
+                            samples.append(text[:512])
+                    print(f'  Loaded {len(samples)} samples via HF Hub')
+                    if not samples:
+                        raise ValueError('No samples loaded from parquet')
+                else:
+                    # Parquet-based datasets work normally
+                    ds_name = ds_info[0]
+                    if len(ds_info) == 4:
+                        ds = load_dataset(ds_name, ds_info[1], split=ds_info[2], trust_remote_code=True)
                         field_idx = 3
                     else:
-                        ds = load_dataset(new_info[0], split=new_info[1])
+                        ds = load_dataset(ds_name, split=ds_info[1], trust_remote_code=True)
                         field_idx = 2
-                elif len(ds_info) == 4:
-                    ds = load_dataset(ds_name, ds_info[1], split=ds_info[2], trust_remote_code=True)
-                    field_idx = 3
-                else:
-                    ds = load_dataset(ds_name, split=ds_info[1], trust_remote_code=True)
-                    field_idx = 2
-                # Get samples — handle different dataset formats
-                samples = []
-                for i in range(min(NUM_SAMPLES, len(ds))):
-                    row = ds[i]
-                    if ds_key == 'daily_dialog':
-                        text = ' '.join(row.get('dialog', [])) if isinstance(row.get('dialog'), list) else str(row.get('dialog', ''))
-                    elif ds_key == 'ultrachat':
-                        msgs = row.get('messages', [])
-                        text = ' '.join(m.get('content', '') for m in msgs if isinstance(m, dict)) if isinstance(msgs, list) else ''
-                    elif ds_key == 'oasst1':
-                        text = str(row.get('text', ''))
-                    elif ds_key in ('alpaca_eval', 'dolly'):
-                        text = str(row.get('instruction', ''))
-                    else:
-                        text = str(row[ds_info[field_idx]])
-                    if text and len(text) > 20:
-                        samples.append(text[:512])  # truncate to 512 chars
+                    # Get samples — handle different dataset formats
+                    samples = []
+                    for i in range(min(NUM_SAMPLES, len(ds))):
+                        row = ds[i]
+                        if ds_key == 'daily_dialog':
+                            text = ' '.join(row.get('dialog', [])) if isinstance(row.get('dialog'), list) else str(row.get('dialog', ''))
+                        elif ds_key == 'ultrachat':
+                            msgs = row.get('messages', [])
+                            text = ' '.join(m.get('content', '') for m in msgs if isinstance(m, dict)) if isinstance(msgs, list) else ''
+                        elif ds_key == 'oasst1':
+                            text = str(row.get('text', ''))
+                        elif ds_key in ('alpaca_eval', 'dolly'):
+                            text = str(row.get('instruction', ''))
+                        else:
+                            text = str(row[ds_info[field_idx]])
+                        if text and len(text) > 20:
+                            samples.append(text[:512])  # truncate to 512 chars
             except Exception as e:
                 print(f'  Could not load dataset {ds_key}: {e}')
                 continue
