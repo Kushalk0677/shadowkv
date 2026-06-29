@@ -1,3 +1,4 @@
+# All values are means across 5 independent runs.
 model_slug,model_params_B,dataset,mode,engine,mean_latency_ms,latency_ci_95_lower,latency_ci_95_upper,throughput_rps,cached_tokens_mean,gpu_energy_j,speedup_vs_lmcache_pct
 qwen25_14b,14.7,ag_news,rag,lmcache_no_native_radix,46.888302764576416,41.94931875522368,42.166122152526704,21.327354025231188,0.0,6758.948333333334,0.0
 qwen25_14b,14.7,ag_news,rag,sglang_radix_attention,43.412087202189774,38.68803167247885,38.89371894280831,23.035059406778483,129.71875,5429.367333333333,7.413822547257743
