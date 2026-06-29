@@ -44,7 +44,7 @@ DATASETS = {
 }
 
 MAX_GEN_TOKENS = 64
-NUM_SAMPLES = 50
+NUM_SAMPLES = None  # None = use all available samples
 
 
 def load_model(model_name: str, device: str):
@@ -144,7 +144,8 @@ def run_fidelity_experiment(args):
                     parquet_path = hf_hub_download(repo_id=repo_id, filename=parquet_file, repo_type='dataset')
                     table = pq.read_table(parquet_path)
                     samples = []
-                    for i in range(min(NUM_SAMPLES, len(table))):
+                    ns = NUM_SAMPLES if NUM_SAMPLES is not None else len(table)
+                    for i in range(min(ns, len(table))):
                         text = str(table.column(field)[i].as_py() or '')
                         if len(text) > 20:
                             samples.append(text[:512])
@@ -162,7 +163,8 @@ def run_fidelity_experiment(args):
                         field_idx = 2
                     # Get samples — handle different dataset formats
                     samples = []
-                    for i in range(min(NUM_SAMPLES, len(ds))):
+                    ns = NUM_SAMPLES if NUM_SAMPLES is not None else len(ds)
+                    for i in range(min(ns, len(ds))):
                         row = ds[i]
                         if ds_key == 'daily_dialog':
                             text = ' '.join(row.get('dialog', [])) if isinstance(row.get('dialog'), list) else str(row.get('dialog', ''))
