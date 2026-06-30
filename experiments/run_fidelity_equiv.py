@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Semantic Fidelity — Fixed KV Cache Reuse using DynamicCache API.
+Semantic Fidelity — KV Cache Reuse using DynamicCache API.
 
-Key fix: Work with token arrays directly to avoid tokenizer decode/encode
-roundtrip issues that corrupt the shared prefix alignment.
+All 5 models, all 10 datasets. Measures whether splicing cached KV from
+one prompt prefix into another changes the generated output.
 """
 import argparse, json, os, sys, time, random, warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
@@ -12,18 +12,30 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODELS = {
+    'gpt2': 'gpt2',
     'tinyllama': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
     'qwen25_15b': 'Qwen/Qwen2.5-1.5B-Instruct',
     'gemma2b': 'google/gemma-2b-it',
+    'phi3mini': 'microsoft/Phi-3-mini-4k-instruct',
 }
 
+# All 10 datasets from the paper's evaluation
 DATASETS = {
     'samsum': ('knkarthick/samsum', 'train', 'dialogue'),
-    'xsum': ('xsum', 'xsum', 'train', 'document'),
+    'xsum': ('xsum', 'train', 'document'),           # script-based
+    'cnn_dailymail': ('cnn_dailymail', '3.0.0', 'train', 'article'),  # needs config name
     'ag_news': ('fancyzhx/ag_news', 'train', 'text'),
     'banking77': ('mteb/banking77', 'train', 'text'),
     'alpaca_eval': ('Thanmay/alpaca_eval', 'eval', 'instruction'),
     'dolly': ('databricks/databricks-dolly-15k', 'train', 'instruction'),
+    'daily_dialog': ('DeepPavlov/daily_dialog', 'train', 'dialog'),
+    'oasst1': ('OpenAssistant/oasst1', 'train', 'text'),
+    'ultrachat': ('HuggingFaceH4/ultrachat_200k', 'train_sft', 'messages'),
+}
+
+# Datasets that need parquet-based loading (script-based on HF)
+PARQUET_DATASETS = {
+    'xsum': ('xsum', 'data/train-00000-of-00001.parquet', 'document'),
 }
 
 
@@ -40,33 +52,23 @@ def load_model(model_name, device):
 
 
 def generate_standard(model, input_ids, max_new):
-    """Standard greedy generation. Returns only the newly generated tokens."""
     with torch.no_grad():
         out = model.generate(
             input_ids=input_ids, max_new_tokens=max_new,
-            do_sample=False, temperature=None, top_p=None,
+            do_sample=False, num_beams=1,
             pad_token_id=model.config.pad_token_id or 0,
         )
-    # Slice out prompt tokens
     return out[0][input_ids.shape[1]:]
 
 
 def generate_with_reuse(model, prompt_ids_orig, prompt_ids_mod, shared, max_new, eos_id):
-    """
-    Generate from prompt_mod, reusing prompt_orig's DynamicCache for shared prefix.
-    Returns token IDs (not decoded text).
-    """
     shared = min(shared, len(prompt_ids_orig[0]), len(prompt_ids_mod[0]))
 
-    # 1. Prefill original
     with torch.no_grad():
         out = model(prompt_ids_orig, use_cache=True)
     cache = out.past_key_values
-
-    # 2. Crop to shared prefix
     cache.crop(shared)
 
-    # 3. Prefill modified suffix on cropped cache
     suffix = prompt_ids_mod[:, shared:]
     if suffix.shape[1] > 0:
         with torch.no_grad():
@@ -82,14 +84,10 @@ def generate_with_reuse(model, prompt_ids_orig, prompt_ids_mod, shared, max_new,
     if total_pos < 1:
         return generate_standard(model, prompt_ids_mod, max_new)
 
-    # 4. Crop combined cache to exclude the last token (it will be passed as input)
     kv = combined_cache
-    kv.crop(total_pos - 1)  # KV for positions 0..total_pos-2
-    inp = start_tok           # the token at position total_pos-1
-
-    # 5. Generate token-by-token
+    kv.crop(total_pos - 1)
+    inp = start_tok
     gen_ids = []
-
     for _ in range(max_new):
         with torch.no_grad():
             outs = model(input_ids=inp, past_key_values=kv, use_cache=True)
@@ -99,14 +97,11 @@ def generate_with_reuse(model, prompt_ids_orig, prompt_ids_mod, shared, max_new,
         gen_ids.append(nid.item())
         if nid.item() == eos_id:
             break
-
     return torch.tensor(gen_ids)
 
 
 def make_shuffled_ids(ids, ratio=0.75):
-    """Shuffle last (1-ratio) tokens, returns (modified_ids, shared_count)."""
     split = int(len(ids) * ratio)
-    # Ensure at least 4 tokens in suffix for meaningful shuffle
     if len(ids) - split < 4:
         split = len(ids) - 4
     if split < 4:
@@ -119,19 +114,66 @@ def make_shuffled_ids(ids, ratio=0.75):
 
 
 def extract(row, key):
+    """Extract payload text from a dataset row, handling different formats."""
     if key in ('alpaca_eval', 'dolly'):
         return str(row.get('instruction', ''))
     elif key == 'samsum':
         return str(row.get('dialogue', ''))
     elif key == 'xsum':
         return str(row.get('document', ''))
+    elif key == 'cnn_dailymail':
+        return str(row.get('article', ''))
     elif key in ('ag_news', 'banking77'):
         return str(row.get('text', ''))
+    elif key == 'daily_dialog':
+        dialog = row.get('dialog', [])
+        return ' '.join(dialog) if isinstance(dialog, list) else str(dialog)
+    elif key == 'oasst1':
+        return str(row.get('text', ''))
+    elif key == 'ultrachat':
+        msgs = row.get('messages', [])
+        texts = [m.get('content', '') for m in msgs if isinstance(m, dict)]
+        return ' '.join(texts)
     return str(row.get(list(row.keys())[0], ''))
 
 
+def load_dataset_samples(dk, n_samples):
+    """Load samples from a dataset, handling script-based datasets."""
+    if dk in PARQUET_DATASETS:
+        # Parquet-based loading for script-based datasets
+        from huggingface_hub import hf_hub_download
+        import pyarrow.parquet as pq
+        repo_id, parquet_file, field = PARQUET_DATASETS[dk]
+        pp = hf_hub_download(repo_id=repo_id, filename=parquet_file, repo_type='dataset')
+        table = pq.read_table(pp)
+        samples = []
+        for i in range(min(n_samples, len(table))):
+            text = str(table.column(field)[i].as_py() or '')
+            if len(text) > 20:
+                samples.append(text[:512])
+        return samples
+    else:
+        # Standard datasets library loading
+        from datasets import load_dataset
+        info = DATASETS[dk]
+        ds_name = info[0]
+        # Handle datasets with config name (4-tuple) vs without (3-tuple)
+        if len(info) == 4:
+            ds = load_dataset(ds_name, info[1], split=info[2], trust_remote_code=True)
+            field = info[3]
+        else:
+            ds = load_dataset(ds_name, split=info[1], trust_remote_code=True)
+            field = info[2]
+        # Use the field index for extraction
+        samples = []
+        for i in range(min(n_samples, len(ds))):
+            t = extract(ds[i], dk)
+            if len(t) > 20:
+                samples.append(t[:512])
+        return samples
+
+
 def run_single_ratio(mk, model, tok, dk, samples, ratio, max_gen_tokens, device):
-    """Run fidelity experiment at a specific shared-prefix ratio."""
     eos_id = tok.eos_token_id or 0
     results = []
     for idx, payload in enumerate(samples):
@@ -172,7 +214,6 @@ def run(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     all_results = []
     random.seed(42)
-
     device = args.device
 
     for mk in args.models:
@@ -180,31 +221,15 @@ def run(args):
 
         for dk in args.datasets:
             print(f'\n=== {mk} on {dk} ===')
-            samples = []
-            try:
-                from datasets import load_dataset
-                info = DATASETS[dk]
-                if len(info) == 4:
-                    ds = load_dataset(info[0], info[1], split=info[2], trust_remote_code=True)
-                else:
-                    ds = load_dataset(info[0], split=info[1], trust_remote_code=True)
-                for i in range(min(args.n_samples, len(ds))):
-                    t = extract(ds[i], dk)
-                    if len(t) > 20:
-                        samples.append(t[:512])
-            except Exception as e:
-                print(f'  Dataset error: {e}')
-                continue
+            samples = load_dataset_samples(dk, args.n_samples)
             print(f'  {len(samples)} samples')
             if not samples:
                 continue
 
             for idx, payload in enumerate(samples):
-                # Tokenize original once
                 ids_1d = tok.encode(payload, truncation=True, max_length=384)
                 if len(ids_1d) < 16:
-                    continue  # too short
-
+                    continue
                 for ratio in args.ratios:
                     chunk = run_single_ratio(mk, model, tok, dk, [payload],
                                              ratio, args.max_gen_tokens, device)
@@ -228,8 +253,9 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--device', default='cuda:0')
     p.add_argument('--models', nargs='+', default=['tinyllama'], choices=MODELS.keys())
-    p.add_argument('--datasets', nargs='+', default=['samsum'], choices=DATASETS.keys())
-    p.add_argument('--n_samples', type=int, default=16)
+    p.add_argument('--datasets', nargs='+', default=['samsum', 'alpaca_eval', 'banking77'],
+                   choices=DATASETS.keys())
+    p.add_argument('--n_samples', type=int, default=32)
     p.add_argument('--max_gen_tokens', type=int, default=64)
     p.add_argument('--ratios', nargs='+', type=float, default=[0.75])
     p.add_argument('--output_dir', default='fidelity_equiv_results')
