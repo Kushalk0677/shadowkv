@@ -23,7 +23,7 @@ MODELS = {
 DATASETS = {
     'samsum': ('knkarthick/samsum', 'train', 'dialogue'),
     'xsum': ('xsum', 'train', 'document'),           # script-based
-    'cnn_dailymail': ('cnn_dailymail', '3.0.0', 'train', 'article'),  # needs config name
+    'cnn_dailymail': ('abisee/cnn_dailymail', '3.0.0', 'train', 'article'),
     'ag_news': ('fancyzhx/ag_news', 'train', 'text'),
     'banking77': ('mteb/banking77', 'train', 'text'),
     'alpaca_eval': ('Thanmay/alpaca_eval', 'eval', 'instruction'),
@@ -138,38 +138,37 @@ def extract(row, key):
 
 
 def load_dataset_samples(dk, n_samples):
-    """Load samples from a dataset, handling script-based datasets."""
+    """Load samples from a dataset, handling script-based datasets.
+    Loads extra rows to ensure n_samples valid samples are returned."""
     if dk in PARQUET_DATASETS:
-        # Parquet-based loading for script-based datasets
         from huggingface_hub import hf_hub_download
         import pyarrow.parquet as pq
         repo_id, parquet_file, field = PARQUET_DATASETS[dk]
         pp = hf_hub_download(repo_id=repo_id, filename=parquet_file, repo_type='dataset')
         table = pq.read_table(pp)
         samples = []
-        for i in range(min(n_samples, len(table))):
+        for i in range(min(n_samples * 3, len(table))):
             text = str(table.column(field)[i].as_py() or '')
-            if len(text) > 20:
+            if len(text) > 5:
                 samples.append(text[:512])
+                if len(samples) >= n_samples:
+                    break
         return samples
     else:
-        # Standard datasets library loading
         from datasets import load_dataset
         info = DATASETS[dk]
         ds_name = info[0]
-        # Handle datasets with config name (4-tuple) vs without (3-tuple)
         if len(info) == 4:
             ds = load_dataset(ds_name, info[1], split=info[2], trust_remote_code=True)
-            field = info[3]
         else:
             ds = load_dataset(ds_name, split=info[1], trust_remote_code=True)
-            field = info[2]
-        # Use the field index for extraction
         samples = []
-        for i in range(min(n_samples, len(ds))):
+        for i in range(min(n_samples * 3, len(ds))):
             t = extract(ds[i], dk)
-            if len(t) > 20:
+            if len(t) > 5:
                 samples.append(t[:512])
+                if len(samples) >= n_samples:
+                    break
         return samples
 
 
@@ -255,7 +254,7 @@ if __name__ == '__main__':
     p.add_argument('--models', nargs='+', default=['tinyllama'], choices=MODELS.keys())
     p.add_argument('--datasets', nargs='+', default=['samsum', 'alpaca_eval', 'banking77'],
                    choices=DATASETS.keys())
-    p.add_argument('--n_samples', type=int, default=32)
+    p.add_argument('--n_samples', type=int, default=128)
     p.add_argument('--max_gen_tokens', type=int, default=64)
     p.add_argument('--ratios', nargs='+', type=float, default=[0.75])
     p.add_argument('--output_dir', default='fidelity_equiv_results')

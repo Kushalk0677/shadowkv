@@ -111,20 +111,20 @@ Each model is loaded in its deployment precision: float32 for CPU experiments, f
 
 Ten datasets covering four task types:
 
-| Dataset | Task Type | Source | Samples |
-|---------|-----------|--------|---------|
-| samsum | Dialogue summarization | Samsung | 32 |
-| xsum | News summarization | BBC | 32 |
-| cnn_dailymail | News summarization | CNN/DailyMail | 32 |
-| ag_news | Text classification | AG's Corpus | 32 |
-| banking77 | Intent classification | Banking | 32 |
-| alpaca_eval | Instruction following | Stanford | 32 |
-| dolly | Instruction following | Databricks | 32 |
-| daily_dialog | Dialogue generation | DeepPavlov | 32 |
-| oasst1 | Conversation | OpenAssistant | 32 |
-| ultrachat | Chat | HuggingFaceH4 | 32 |
+| Dataset | Task Type | Source | Target Samples |
+|---------|-----------|--------|----------------|
+| samsum | Dialogue summarization | Samsung | 128 |
+| xsum | News summarization | BBC | 128 |
+| cnn_dailymail | News summarization | CNN/DailyMail | 128 |
+| ag_news | Text classification | AG's Corpus | 128 |
+| banking77 | Intent classification | Banking | 128 |
+| alpaca_eval | Instruction following | Stanford | 128 |
+| dolly | Instruction following | Databricks | 128 |
+| daily_dialog | Dialogue generation | DeepPavlov | 128 |
+| oasst1 | Conversation | OpenAssistant | 128 |
+| ultrachat | Chat | HuggingFaceH4 | 128 |
 
-Each dataset is loaded via HuggingFace `datasets`. Script-based datasets (xsum, cnn_dailymail) use parquet-based loading for reliability.
+Each dataset is loaded via HuggingFace `datasets`. The loading loop scans up to 3× the target sample count to ensure `n` valid samples are collected. The minimum text length threshold is 5 characters (reduced from 20 in preliminary runs to maximize sample recovery for short-text datasets like banking77).
 
 ## 5. Metrics
 

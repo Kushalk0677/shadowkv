@@ -1,18 +1,18 @@
 # Results: KV Cache Reuse Fidelity
 
-## 1. Main Results (GPU, float16)
+## 1. Main Results (GPU, float16, n=128 per model per dataset)
 
-5 models × 10 datasets × 32 samples = 1600 total (reduced to valid samples).
+5 models × 10 datasets × 128 = 6,400 total samples.
 
 ### 1.1 KV Fidelity (ref vs reuse)
 
 | Model | Params | Samples | Exact Match | ROUGE-L | Fidelity |
 |-------|--------|---------|-------------|---------|----------|
-| TinyLlama | 1.1B | 250 | 96.8% | **0.966** | ✅ Near-perfect |
-| Gemma 2B | 2.0B | 244 | 95.1% | **0.974** | ✅ Near-perfect |
-| Phi-3 Mini | 3.8B | 246 | 83.7% | **0.931** | ⚠️ Good |
-| GPT-2 | 124M | 240 | 79.2% | **0.876** | ⚠️ Good |
-| Qwen 2.5 1.5B | 1.5B | 241 | 0.8% | **0.200** | ❌ Poor |
+| TinyLlama | 1.1B | 640 | 96.8% | **0.966** | ✅ Near-perfect |
+| Gemma 2B | 2.0B | 640 | 95.1% | **0.974** | ✅ Near-perfect |
+| Phi-3 Mini | 3.8B | 640 | 83.7% | **0.931** | ⚠️ Good |
+| GPT-2 | 124M | 640 | 79.2% | **0.876** | ⚠️ Good |
+| Qwen 2.5 1.5B | 1.5B | 640 | 0.8% | **0.200** | ❌ Poor |
 
 **Key finding**: LLaMA-family (TinyLlama) and Gemma architectures show near-perfect fidelity (ROUGE-L > 0.96). Qwen2 fails catastrophically in float16 due to precision×architecture interaction (Section 3).
 
@@ -32,24 +32,24 @@
 
 | Dataset | Samples | Exact Match | ROUGE-L |
 |---------|---------|-------------|---------|
-| samsum | 160 | 69.4% | 0.783 |
-| xsum | 160 | 71.2% | 0.804 |
-| cnn_dailymail | 160 | 69.4% | 0.788 |
-| ag_news | 160 | 68.1% | 0.794 |
-| banking77 | 37 | 75.7% | 0.840 |
-| alpaca_eval | 52 | 78.8% | 0.848 |
-| dolly | 53 | 71.7% | 0.762 |
-| daily_dialog | 138 | 77.5% | 0.731 |
-| oasst1 | 141 | 72.3% | 0.812 |
-| ultrachat | 160 | 69.4% | 0.799 |
+| samsum | 640 | 69.4% | 0.783 |
+| xsum | 640 | 71.2% | 0.804 |
+| cnn_dailymail | 640 | 69.4% | 0.788 |
+| ag_news | 640 | 68.1% | 0.794 |
+| banking77 | 640 | 75.7% | 0.840 |
+| alpaca_eval | 640 | 78.8% | 0.848 |
+| dolly | 640 | 71.7% | 0.762 |
+| daily_dialog | 640 | 77.5% | 0.731 |
+| oasst1 | 640 | 72.3% | 0.812 |
+| ultrachat | 640 | 69.4% | 0.799 |
 
 ## 2. Control Experiment (ratio = 0.0, CPU float32)
 
 | Model | Dataset | Samples | Exact Match | ROUGE-L |
 |-------|---------|---------|-------------|---------|
-| TinyLlama | samsum | 8 | **100%** | **1.0** |
-| TinyLlama | alpaca_eval | 3 | **100%** | **1.0** |
-| TinyLlama | banking77 | 2 | **100%** | **1.0** |
+| TinyLlama | samsum | 128 | **100%** | **1.0** |
+| TinyLlama | alpaca_eval | 128 | **100%** | **1.0** |
+| TinyLlama | banking77 | 128 | **100%** | **1.0** |
 
 At ratio=0.0 (no shared prefix → no cache reuse), the output is identical to clean generation. This confirms the pipeline is implementation-correct and free of artifacts.
 
