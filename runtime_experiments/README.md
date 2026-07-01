@@ -5,7 +5,7 @@ production LLM serving systems.
 
 ## Hardware
 
-NVIDIA RTX 6000 Ada (48 GB VRAM, 960 GB/s), Intel Xeon Gold 5418Y, 128 GB RAM.
+NVIDIA RTX PRO 6000 Blackwell (96 GB VRAM).
 
 ## Models
 
@@ -28,7 +28,7 @@ Two prompt modes: templated and RAG.
 ## Key Results
 
 **SGLang:** ShadowKV++ achieves 16.7% speedup over LMCache at 7B, with
-benefit increasing monotonically with model size.
+benefit increasing with model size up to 7B.
 
 **vLLM:** At 32B, APC + ShadowKV++ achieves 19.0% speedup over no-cache
 and reduces GPU energy by 25%.
