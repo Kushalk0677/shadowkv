@@ -8,7 +8,7 @@ On GPU (T4, float16), Qwen 2.5 1.5B shows **0.20 ROUGE-L** between ref (clean ge
 
 On CPU (float32), earlier tests showed ~0.99 correspondence with divergence starting at token 7.
 
-### Root Cause: Precision �- Architecture Interaction
+### Root Cause: Precision × Architecture Interaction
 
 The failure is a **compounding effect** of two factors:
 
@@ -36,8 +36,8 @@ Step  ref_token      reuse_token     Match
   2    my             my              ✓
   3    house          house           ✓
   4    and            and             ✓
-  5    we             we'll           �-  (first divergence)
-  6    can            play            �-
+  5    we             we'll           ✗  (first divergence)
+  6    can            play            ✗
   ...  (completely different after this point)
 ```
 

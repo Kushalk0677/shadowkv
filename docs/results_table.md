@@ -2,7 +2,7 @@
 
 ## 1. Main Results (GPU, float16, n=128 per model per dataset)
 
-5 models �- 10 datasets �- 128 = 6,400 total samples.
+5 models × 10 datasets × 128 = 6,400 total samples.
 
 ### 1.1 KV Fidelity (ref vs reuse)
 
@@ -14,7 +14,7 @@
 | GPT-2 | 124M | 640 | 79.2% | **0.876** | ⚠️ Good |
 | Qwen 2.5 1.5B | 1.5B | 640 | 0.8% | **0.200** | ❌ Poor |
 
-**Key finding**: LLaMA-family (TinyLlama) and Gemma architectures show near-perfect fidelity (ROUGE-L > 0.96). Qwen2 fails catastrophically in float16 due to precision�-architecture interaction (Section 3).
+**Key finding**: LLaMA-family (TinyLlama) and Gemma architectures show near-perfect fidelity (ROUGE-L > 0.96). Qwen2 fails catastrophically in float16 due to precision×architecture interaction (Section 3).
 
 ### 1.2 Prompt Sensitivity (exact vs ref) — Baseline
 
@@ -70,7 +70,7 @@ The precision-dependent fidelity loss has two components:
 - float32: ~2e-5 (negligible — only flips tokens at close decision boundaries)
 - float16: ~1e-2 (significant — flips tokens regularly)
 
-**2. Architecture amplification**: Qwen2's attention implementation amplifies the float16 error approximately 10�- more than LLaMA/Gemma. Layer-by-layer tracing shows Qwen's hidden state diff grows from ~1e-4 at layer 1 to ~1e-2 at layer 28 in float16. The same experiment in float32 grew from ~5e-7 to ~2e-5.
+**2. Architecture amplification**: Qwen2's attention implementation amplifies the float16 error approximately 10× more than LLaMA/Gemma. Layer-by-layer tracing shows Qwen's hidden state diff grows from ~1e-4 at layer 1 to ~1e-2 at layer 28 in float16. The same experiment in float32 grew from ~5e-7 to ~2e-5.
 
 ### 3.2 Recommendation
 
