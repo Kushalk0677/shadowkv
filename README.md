@@ -22,17 +22,17 @@ ShadowKV++ combines three cooperating components:
 
 ## Key Results
 
-### Main HF Evaluation (5 models × 10 datasets × 5 seeds)
+### Main HF Evaluation (5 models �- 10 datasets �- 5 seeds)
 
 | Engine | Mean Speedup | Waste | Hit Rate |
 |--------|:-----------:|:-----:|:--------:|
-| No cache | 1.000× | 0.000 | 0.000 |
-| Reactive | 1.214× | 0.000 | 0.317 |
-| Greedy | 1.221× | 0.000 | 0.320 |
-| Strict reactive | 1.254× | 0.000 | 0.310 |
-| Frequency spec. | 1.208× | 0.284 | 0.617 |
-| ShadowKV | 1.287× | 0.264 | 0.606 |
-| **ShadowKV++** | **1.365×** | **0.156** | **0.402** |
+| No cache | 1.000�- | 0.000 | 0.000 |
+| Reactive | 1.214�- | 0.000 | 0.317 |
+| Greedy | 1.221�- | 0.000 | 0.320 |
+| Strict reactive | 1.254�- | 0.000 | 0.310 |
+| Frequency spec. | 1.208�- | 0.284 | 0.617 |
+| ShadowKV | 1.287�- | 0.264 | 0.606 |
+| **ShadowKV++** | **1.365�-** | **0.156** | **0.402** |
 
 - Waste 41% below ShadowKV (0.156 vs 0.264)
 - Significant on all 10 datasets ($p < 0.001$, nine datasets; $p < 10^{-4}$, one dataset)
@@ -93,7 +93,7 @@ src/proactive_kv_cache/        Core engines, cache bank, controller, models, pol
 ├── results/
 │   ├── final_p100/            Canonical P100 benchmark JSONs
 │   ├── final_t4/              Canonical T4 benchmark JSONs
-│   ├── fidelity/              Fidelity experiment JSONs (5 models × 10 datasets)
+│   ├── fidelity/              Fidelity experiment JSONs (5 models �- 10 datasets)
 │   │   ├── all_results.json   1,221 samples
 │   │   ├── control/           Ratio=0.0 control (13 samples, 100% match)
 │   │   └── qwen_ratios/       Multi-ratio sweep (75/50/25%)
