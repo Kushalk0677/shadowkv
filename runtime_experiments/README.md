@@ -5,7 +5,7 @@ production LLM serving systems.
 
 ## Hardware
 
-NVIDIA RTX PRO 6000 Blackwell (96 GB VRAM).
+NVIDIA RTX PRO 6000 Blackwell.
 
 ## Models
 
