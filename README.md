@@ -71,43 +71,59 @@ ShadowKV++ combines three cooperating components:
 
 ```
 src/proactive_kv_cache/        Core engines, cache bank, controller, models
-  engines.py                   BaseEngine, NoCacheEngine, ShadowKVPlusEngine
-  cache.py                     TieredStateBank with radix trie
-  controller.py                AdaptiveReuseController, utility scoring
-  policy.py                    CostAwareSlackPolicy
-  semantic.py                  SemanticKVIndex, token sketching
-  models.py                    Backend abstraction (FakeBackend, HFBackend)
-  datasets.py                  Dataset loading and prompt templates
-  utils.py                     Calibration, estimates, KV byte counting
-  metrics.py                   Engine metrics, aggregation
-  policy_learning.py           Offline grid-search learner
-  workload.py                  Workload generation
+├── engines.py                   BaseEngine, NoCacheEngine, ShadowKVPlusEngine
+├── cache.py                     TieredStateBank with radix trie
+├── controller.py                AdaptiveReuseController, utility scoring
+├── policy.py                    CostAwareSlackPolicy
+├── semantic.py                  SemanticKVIndex, token sketching
+├── models.py                    Backend abstraction (FakeBackend, HFBackend)
+├── datasets.py                  Dataset loading and prompt templates
+├── utils.py                     Calibration, estimates, KV byte counting
+├── metrics.py                   Engine metrics, aggregation
+├── policy_learning.py           Offline grid-search learner
+├── workload.py                  Workload generation
+├── backend_adapters.py          Backend adapter layer
+├── config_loader.py             Runtime configuration
+├── base_policy.py               Policy controller base class
+├── rl_policy.py                 RL-based policy controller
+├── utility_policy.py            Utility-based policy controller
+├── utility_admission.py         Online utility estimator
+├── telemetry.py                 JSON decision logger
+├── energy.py                    GPU energy metering
+├── config_watcher.py            Config file watcher
+├── prefix_gate.py               Raw-mode gate logic
+├── __init__.py
+├── backend/
+│   ├── fake_backend.py          Fake backend for simulation
+│   └── __init__.py
 experiments/
-  run_benchmark.py             Main benchmark entry point
-  run_fidelity_equiv.py        KV cache reuse fidelity pipeline
-  eval_comprehensive.py        ROUGE-L and exact-match evaluator
-  profile_plan.py              Controller Plan() latency profiler
-  analyze_shadowkv_results.py  Result parser and policy-summary generator
-  archive/                     Superseded experiment scripts
+├── run_benchmark.py             Main benchmark entry point
+├── run_fidelity_equiv.py        KV cache reuse fidelity pipeline
+├── eval_comprehensive.py        ROUGE-L and exact-match evaluator
+├── profile_plan.py              Controller Plan() latency profiler
+├── analyze_shadowkv_results.py  Result parser and policy-summary generator
+├── archive/                     Superseded experiment scripts
+├── ...
 results/
-  final_p100/                  Canonical P100 benchmark JSONs
-  final_t4/                    Canonical T4 benchmark JSONs
-  fidelity/                    Fidelity experiment JSONs (5 models x 10 datasets)
-    all_results.json           1,221 samples
-    control/                   Ratio=0.0 control (13 samples, 100% match)
-    qwen_ratios/               Multi-ratio sweep (75/50/25%)
-  RESULTS.md                   Headline aggregate table
-  summary_by_engine.csv
+├── final_p100/                  Canonical P100 benchmark JSONs
+├── final_t4/                    Canonical T4 benchmark JSONs
+├── fidelity/
+│   ├── all_results.json         1,221 samples (5 models x 10 datasets)
+│   ├── control/                 Ratio=0.0 control (13 samples, 100% match)
+│   └── qwen_ratios/             Multi-ratio sweep (75/50/25%)
+├── RESULTS.md                   Headline aggregate table
+└── summary_by_engine.csv
 docs/
-  design_overview.md           System architecture and design rationale
-  engine_failures.md           Failure analysis (breakeven guard, coupling penalty)
-  semantic_fidelity.md         Full fidelity report
-  fidelity_deep_analysis.md    Root cause analysis of Qwen float16 failure
-  experimental_setup.md        Fidelity methodology description
-  results_table.md             Complete results with precision comparison
-  reports/                     Archived design reports
+├── design_overview.md           System architecture and design rationale
+├── engine_failures.md           Failure analysis (breakeven guard, coupling penalty)
+├── semantic_fidelity.md         Full fidelity report
+├── fidelity_deep_analysis.md    Root cause analysis of Qwen float16 failure
+├── experimental_setup.md        Fidelity methodology description
+├── results_table.md             Complete results with precision comparison
+├── reports/                     Archived design reports
+├── ...
 runtime_experiments/           SGLang, LMCache, vLLM results
-tests/                         Unit and regression tests
+tests/                           Unit and regression tests
 pyproject.toml
 requirements.txt
 ```
