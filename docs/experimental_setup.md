@@ -124,7 +124,7 @@ Ten datasets covering four task types:
 | oasst1 | Conversation | OpenAssistant | 128 |
 | ultrachat | Chat | HuggingFaceH4 | 128 |
 
-Each dataset is loaded via HuggingFace `datasets`. The loading loop scans up to 3Ã— the target sample count to ensure `n` valid samples are collected. The minimum text length threshold is 5 characters (reduced from 20 in preliminary runs to maximize sample recovery for short-text datasets like banking77).
+Each dataset is loaded via HuggingFace `datasets`. The loading loop scans up to 3Ã- the target sample count to ensure `n` valid samples are collected. The minimum text length threshold is 5 characters (reduced from 20 in preliminary runs to maximize sample recovery for short-text datasets like banking77).
 
 ## 5. Metrics
 
