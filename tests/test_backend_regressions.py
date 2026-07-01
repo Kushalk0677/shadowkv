@@ -19,15 +19,31 @@ def test_fake_backend_uses_persistent_vocabulary_across_prompts():
 
 def test_fake_backend_cached_prefill_extends_existing_state():
     backend = FakeBackend()
+    # Disable compression for this test to inspect tokens
+    backend._disable_compression = True
     prefix = backend.tokenize('shared prefix')
     suffix = backend.tokenize('new suffix')
-
+    
     prefix_out = backend.prefill(prefix)
     combined_out = backend.prefill(suffix, past_key_values=prefix_out.kv_cache)
 
     assert combined_out.kv_cache['tokens'] == prefix + suffix
     assert combined_out.kv_cache['prefix_len'] == len(prefix) + len(suffix)
     assert combined_out.memory_bytes > prefix_out.memory_bytes
+
+
+def test_fake_backend_slices_compressed_kv_by_tokens_not_bytes():
+    backend = FakeBackend()
+    tokens = backend.tokenize('shared prefix compressed cache suffix')
+
+    prefill = backend.prefill(tokens)
+    sliced = backend.slice_past_key_values(prefill.kv_cache, 3)
+    combined = backend.prefill(tokens[3:], past_key_values=sliced)
+
+    assert sliced['tokens'] == tokens[:3]
+    assert sliced['compressed'] is False
+    assert combined.prepared_past_length == 3
+    assert combined.kv_cache['prefix_len'] == len(tokens)
 
 
 @pytest.mark.skipif(

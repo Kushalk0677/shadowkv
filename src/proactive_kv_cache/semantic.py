@@ -3,7 +3,18 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
+import argparse
+import json
 from typing import Dict, Iterable, List, Tuple
+
+try:
+    from .config_loader import CONFIG
+except ImportError:
+    class _FallbackConfig:
+        def get(self, dotted_path: str, default=None):
+            return default
+
+    CONFIG = _FallbackConfig()
 
 
 @dataclass
@@ -81,6 +92,12 @@ class SemanticKVIndex:
         self.sketcher = TokenSketcher(dims=dims)
         self.max_entries = max_entries
         self._rows: Dict[Tuple[int, ...], dict] = {}
+        # Add caching for recent sketches and query results
+        self._sketch_cache: Dict[Tuple[int, ...], Tuple[float, ...]] = {}
+        self._query_result_cache: Dict[Tuple[Tuple[int, ...], int, float, str], List[SemanticMatch]] = {}
+        # Limit cache sizes to prevent memory growth
+        self._max_sketch_cache_size = 256
+        self._max_query_cache_size = 128
 
     def add(self, prefix_tokens: Tuple[int, ...], semantic_key: str | None = None) -> None:
         if not prefix_tokens:
@@ -102,11 +119,31 @@ class SemanticKVIndex:
             row['semantic_key'] = semantic_key
         row['observations'] = int(row.get('observations', 0)) + 1
         row['last_seen'] = now
+        
+        # Invalidate cached query results since the index has changed
+        self._query_result_cache.clear()
 
     def query(self, tokens: Tuple[int, ...], k: int = 4, min_similarity: float = 0.35, semantic_key: str | None = None) -> List[SemanticMatch]:
         if not tokens or not self._rows:
             return []
-        q = self.sketcher.sketch(tokens)
+            
+        # Create cache key for this query
+        cache_key = (tokens, k, min_similarity, semantic_key or "")
+        if cache_key in self._query_result_cache:
+            return self._query_result_cache[cache_key]
+        
+        # Use cached sketch if available, otherwise compute and cache it
+        if tokens in self._sketch_cache:
+            q = self._sketch_cache[tokens]
+        else:
+            q = self.sketcher.sketch(tokens)
+            # Add to sketch cache, maintaining size limit
+            if len(self._sketch_cache) >= self._max_sketch_cache_size:
+                # Remove oldest entry (first inserted)
+                oldest_key = next(iter(self._sketch_cache))
+                del self._sketch_cache[oldest_key]
+            self._sketch_cache[tokens] = q
+            
         matches: List[SemanticMatch] = []
         for prefix, row in self._rows.items():
             sim = self.sketcher.cosine(q, row['vector'])
@@ -115,7 +152,7 @@ class SemanticKVIndex:
                 # scaffolds that express the same serving task with different
                 # surface forms. The boost exposes semantic opportunity without
                 # requiring an encoder dependency in the hot path.
-                sim = max(sim, 0.92)
+                sim = max(sim, float(CONFIG.get('semantic.index.equivalence_key_boost', 0.92)))
             if sim < min_similarity:
                 continue
             matches.append(
@@ -128,4 +165,53 @@ class SemanticKVIndex:
                 )
             )
         matches.sort(key=lambda m: (m.similarity, m.observations, m.prefix_len), reverse=True)
-        return matches[:k]
+        result = matches[:k]
+        
+        # Cache the query result, maintaining size limit
+        if len(self._query_result_cache) >= self._max_query_cache_size:
+            # Remove oldest entry (first inserted)
+            oldest_key = next(iter(self._query_result_cache))
+            del self._query_result_cache[oldest_key]
+        self._query_result_cache[cache_key] = result
+        
+        return result
+
+    def diagnostics(self) -> Dict:
+        family_counts: Dict[str, int] = {}
+        total_prefix_tokens = 0
+        total_observations = 0
+        for prefix, row in self._rows.items():
+            family = str(row.get('semantic_key') or '<none>')
+            family_counts[family] = family_counts.get(family, 0) + 1
+            total_prefix_tokens += len(prefix)
+            total_observations += int(row.get('observations', 0))
+        vector_bytes = len(self._rows) * self.sketcher.dims * 8
+        token_bytes = total_prefix_tokens * 8
+        # Account for caching structures
+        sketch_cache_bytes = len(self._sketch_cache) * 8 * self.sketcher.dims  # Assuming average sketch size
+        query_cache_bytes = len(self._query_result_cache) * 200  # Rough estimate for query result size
+        return {
+            'entries': len(self._rows),
+            'max_entries': int(self.max_entries),
+            'dims': int(self.sketcher.dims),
+            'families': len(family_counts),
+            'family_counts': family_counts,
+            'total_prefix_tokens': total_prefix_tokens,
+            'total_observations': total_observations,
+            'approx_memory_bytes': int(vector_bytes + token_bytes + sketch_cache_bytes + query_cache_bytes),
+            'approx_vector_bytes': int(vector_bytes),
+            'approx_token_bytes': int(token_bytes),
+            'approx_cache_bytes': int(sketch_cache_bytes + query_cache_bytes),
+        }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Print SemanticKVIndex diagnostic schema.')
+    parser.add_argument('--empty', action='store_true', help='Emit diagnostics for an empty index.')
+    args = parser.parse_args()
+    index = SemanticKVIndex()
+    print(json.dumps(index.diagnostics(), indent=2, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()

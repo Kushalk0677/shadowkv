@@ -64,10 +64,11 @@ class CostAwareSlackPolicy(SpeculationPolicy):
     def __init__(
         self,
         min_frequency: float = 0.18,
-        ms_per_token: float = 1.2,
+        prefill_ms_per_token: float = 1.2,
         fixed_prefill_overhead_ms: float = 5.0,
         memory_penalty_per_mb: float = 0.9,
         kv_mb_per_token: float = 0.0015,
+        model_kv_mb_per_token: float | None = None,  # per-model kappa; overrides kv_mb_per_token when set
         idle_cost_fraction: float = 0.50,
         gpu_idle_cost_fraction: float = 0.35,
         benefit_cost_ratio: float = 1.05,
@@ -91,10 +92,11 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         dominance_tolerance: float = 0.90,
     ):
         self.min_frequency = min_frequency
-        self.ms_per_token = ms_per_token
+        self.prefill_ms_per_token = prefill_ms_per_token
         self.fixed_prefill_overhead_ms = fixed_prefill_overhead_ms
         self.memory_penalty_per_mb = memory_penalty_per_mb
         self.kv_mb_per_token = kv_mb_per_token
+        self.model_kv_mb_per_token = model_kv_mb_per_token  # per-model kappa when available
         self.idle_cost_fraction = idle_cost_fraction
         self.gpu_idle_cost_fraction = gpu_idle_cost_fraction
         self.benefit_cost_ratio = benefit_cost_ratio
@@ -118,7 +120,8 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         self.dominance_tolerance = dominance_tolerance
 
     def _estimate_memory_mb(self, prefix: Tuple[int, ...]) -> float:
-        return max(len(prefix) * self.kv_mb_per_token, 0.002)
+        effective_kappa = self.model_kv_mb_per_token if self.model_kv_mb_per_token is not None else self.kv_mb_per_token
+        return max(len(prefix) * effective_kappa, 0.002)
 
     def _length_quality(self, prefix_len: int) -> float:
         if prefix_len < self.min_prefix_len:
@@ -167,7 +170,7 @@ class CostAwareSlackPolicy(SpeculationPolicy):
 
     def _expected_saved_prefill_ms(self, prefix: Tuple[int, ...], expected_future_reuses: float) -> float:
         effective_len = min(len(prefix), self.max_prefix_len)
-        reusable_cost = self.fixed_prefill_overhead_ms + (effective_len * self.ms_per_token)
+        reusable_cost = self.fixed_prefill_overhead_ms + (effective_len * self.prefill_ms_per_token)
         return float(expected_future_reuses * reusable_cost * self._length_quality(effective_len))
 
     def _expected_cost_ms(self, prefix: Tuple[int, ...], bank: TieredStateBank, target_tier: str) -> float:
@@ -175,7 +178,7 @@ class CostAwareSlackPolicy(SpeculationPolicy):
         memory_pressure = bank.get_memory_bytes() / max(bank.max_memory_bytes, 1)
         pressure_multiplier = 1.0 + 1.25 * memory_pressure
         effective_len = min(len(prefix), self.max_prefix_len)
-        prefill_cost = self.fixed_prefill_overhead_ms + (effective_len * self.ms_per_token)
+        prefill_cost = self.fixed_prefill_overhead_ms + (effective_len * self.prefill_ms_per_token)
         idle_fraction = self.gpu_idle_cost_fraction if target_tier == 'gpu' else self.idle_cost_fraction
         memory_cost = estimated_memory_mb * self.memory_penalty_per_mb
         return float((prefill_cost * idle_fraction + memory_cost) * pressure_multiplier)

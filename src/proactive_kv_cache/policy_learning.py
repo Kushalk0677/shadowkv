@@ -17,6 +17,12 @@ ENGINE_KEYS = {
     'frequency_speculative',
     'shadow_kv',
     'shadow_kv_plus',
+    'vllm_apc',
+    'vllm_apc_shadowkv_plus',
+    'sglang_radix_attention',
+    'sglang_radix_attention_shadowkv_plus',
+    'lmcache',
+    'lmcache_shadowkv_plus',
 }
 
 
@@ -95,7 +101,7 @@ def load_feature_rows(paths: Iterable[str | Path]) -> List[RunFeatureRow]:
                         n_requests=int(config.get('n_requests') or 0),
                         mean_latency_ms=mean,
                         speedup_vs_no_cache=speedup,
-                        cache_hit_rate=float(metrics.get('cache_hit_rate') or 0.0),
+                        cache_hit_rate=float(metrics.get('cache_hit_rate', metrics.get('hit_rate', 0.0)) or 0.0),
                         wasted_compute_ratio=float(metrics.get('wasted_compute_ratio') or 0.0),
                         reused_prefix_tokens_total=float(metrics.get('reused_prefix_tokens_total') or 0.0),
                         recompute_tokens_total=float(metrics.get('recompute_tokens_total') or 0.0),

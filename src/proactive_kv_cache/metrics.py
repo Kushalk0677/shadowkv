@@ -11,6 +11,8 @@ class RunSummary:
     mean_latency_ms: float
     p50_latency_ms: float
     p95_latency_ms: float
+    p99_latency_ms: float
+    p999_latency_ms: float
     throughput_rps: float
     service_throughput_rps: float
     hit_rate: float
@@ -48,6 +50,8 @@ class RunSummary:
     speculative_overlap_events: int = 0
     bootstrap_store_deferrals: int = 0
     speculative_useful_savings_ms: float = 0.0
+    bypass_regret_ms_total: float = 0.0
+    transfer_regret_ms_total: float = 0.0
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -67,6 +71,8 @@ def summarize_run(
     mean_latency = float(lat.mean()) if lat.size else 0.0
     p50 = float(np.percentile(lat, 50)) if lat.size else 0.0
     p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
+    p99 = float(np.percentile(lat, 99)) if lat.size else 0.0
+    p999 = float(np.percentile(lat, 99.9)) if lat.size else 0.0
 
     speculative_hits = int(bank_metrics.get('speculative_hits', 0))
     speculative_hit_rate = float(bank_metrics.get('speculative_hit_rate', 0.0))
@@ -98,7 +104,7 @@ def summarize_run(
         'requests_seen', 'reused_prefix_tokens_total', 'recompute_tokens_total', 'estimated_tokens_saved_total'
     ):
         merged[key] = int(merged.get(key, bank_metrics.get(key, 0)))
-    for key in ('saved_latency_estimate_ms', 'store_latency_total_ms', 'full_prefill_latency_total_ms'):
+    for key in ('saved_latency_estimate_ms', 'store_latency_total_ms', 'full_prefill_latency_total_ms', 'bypass_regret_ms_total', 'transfer_regret_ms_total'):
         merged[key] = float(merged.get(key, bank_metrics.get(key, 0.0)))
     merged['cache_active_final'] = bool(merged.get('cache_active_final', True))
     merged['auto_disabled_reason'] = merged.get('auto_disabled_reason')
@@ -113,6 +119,8 @@ def summarize_run(
         mean_latency_ms=mean_latency,
         p50_latency_ms=p50,
         p95_latency_ms=p95,
+        p99_latency_ms=p99,
+        p999_latency_ms=p999,
         throughput_rps=throughput,
         service_throughput_rps=service_throughput,
         hit_rate=hit_rate,
@@ -150,4 +158,6 @@ def summarize_run(
         speculative_overlap_events=merged['speculative_overlap_events'],
         bootstrap_store_deferrals=merged['bootstrap_store_deferrals'],
         speculative_useful_savings_ms=merged['speculative_useful_savings_ms'],
+        bypass_regret_ms_total=merged['bypass_regret_ms_total'],
+        transfer_regret_ms_total=merged['transfer_regret_ms_total'],
     )

@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import time
+import asyncio
+import zlib
+import pickle
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
+from functools import lru_cache
+
+from .config_loader import CONFIG
 
 
 @dataclass
@@ -48,6 +54,35 @@ class Backend:
         return past_key_values
 
     def move_kv_cache(self, past_key_values: Any, target: str) -> Any:
+        if isinstance(past_key_values, dict):
+            moved = dict(past_key_values)
+            moved['device'] = target
+            return moved
+        return past_key_values
+
+    def compress_kv_cache(self, past_key_values: Any) -> Any:
+        if isinstance(past_key_values, dict):
+            compressed = dict(past_key_values)
+            tokens = compressed.get('tokens', ())
+            if tokens:
+                compressed_data = zlib.compress(pickle.dumps(tokens))
+                compressed['tokens'] = compressed_data
+                compressed['compressed'] = True
+            return compressed
+        return past_key_values
+
+    def decompress_kv_cache(self, past_key_values: Any) -> Any:
+        if isinstance(past_key_values, dict) and past_key_values.get('compressed'):
+            decompressed = dict(past_key_values)
+            compressed_data = decompressed.get('tokens', b'')
+            if compressed_data:
+                # Only decompress if it's actually compressed (bytes data)
+                if isinstance(compressed_data, bytes):
+                    tokens = pickle.loads(zlib.decompress(compressed_data))
+                    decompressed['tokens'] = tokens
+                # If tokens are already a tuple, it's not really compressed
+                decompressed['compressed'] = False
+            return decompressed
         return past_key_values
 
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
@@ -89,10 +124,12 @@ class FakeBackend(Backend):
             return 0.0
         return 1.0 - (len(a & b) / max(len(a | b), 1))
 
+    @lru_cache(maxsize=128)
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         latency_per_token = 2.5 if self.device == 'cpu' else 1.0
         return float(latency_per_token * max(token_count, 0) + 0.25)
 
+    @lru_cache(maxsize=128)
     def estimate_kv_cache_bytes(self, token_count: int) -> int:
         return int(max(token_count, 0) * (128 if self.device == 'cpu' else 160))
 
@@ -101,6 +138,8 @@ class FakeBackend(Backend):
         latency_ms = self.estimate_prefill_cost_ms(token_count)
         past_tokens: Tuple[int, ...] = ()
         if isinstance(past_key_values, dict):
+            if past_key_values.get('compressed'):
+                past_key_values = self.decompress_kv_cache(past_key_values)
             past_tokens = tuple(past_key_values.get('tokens', ()))
             if not past_tokens and int(past_key_values.get('prefix_len', 0)) > 0:
                 # Older tests and lightweight simulations sometimes store only
@@ -108,9 +147,44 @@ class FakeBackend(Backend):
                 # cache for latency/accounting purposes.
                 past_tokens = tuple([0] * int(past_key_values.get('prefix_len', 0)))
         full_tokens = past_tokens + tuple(tokens)
-        memory_bytes = int(max(len(full_tokens), 1) * (128 if self.device == 'cpu' else 160))
+        memory_bytes = self.estimate_kv_cache_bytes(len(full_tokens))
         kv = {'prefix_len': len(full_tokens), 'tokens': full_tokens, 'device': self.device}
+        # Compress KV cache if targeting CPU tier and not in a test scenario
+        if self.device == 'cpu' and not hasattr(self, '_disable_compression'):
+            kv = self.compress_kv_cache(kv)
+            # Update memory_bytes to reflect compressed size
+            compressed_data = kv.get('tokens', b'')
+            if isinstance(compressed_data, bytes):
+                memory_bytes = len(compressed_data)
         time.sleep(min(latency_ms / 1000.0, 0.01))
+        gpu_util = 35.0 if self.device.startswith('cuda') else None
+        return PrefillResult(
+            kv_cache=kv,
+            latency_ms=latency_ms,
+            memory_bytes=memory_bytes,
+            device=self.device,
+            gpu_utilization_pct=gpu_util,
+            used_past_key_values=bool(past_tokens),
+            prepared_past_length=len(past_tokens),
+        )
+
+    async def prefill_async(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
+        token_count = len(tokens)
+        latency_ms = self.estimate_prefill_cost_ms(token_count)
+        past_tokens: Tuple[int, ...] = ()
+        if isinstance(past_key_values, dict):
+            if past_key_values.get('compressed'):
+                past_key_values = self.decompress_kv_cache(past_key_values)
+            past_tokens = tuple(past_key_values.get('tokens', ()))
+            if not past_tokens and int(past_key_values.get('prefix_len', 0)) > 0:
+                # Older tests and lightweight simulations sometimes store only
+                # a prefix length placeholder. Treat that as a valid prepared
+                # cache for latency/accounting purposes.
+                past_tokens = tuple([0] * int(past_key_values.get('prefix_len', 0)))
+        full_tokens = past_tokens + tuple(tokens)
+        memory_bytes = self.estimate_kv_cache_bytes(len(full_tokens))
+        kv = {'prefix_len': len(full_tokens), 'tokens': full_tokens, 'device': self.device}
+        await asyncio.sleep(min(latency_ms / 1000.0, 0.01))
         gpu_util = 35.0 if self.device.startswith('cuda') else None
         return PrefillResult(
             kv_cache=kv,
@@ -127,6 +201,19 @@ class FakeBackend(Backend):
             moved = dict(past_key_values)
             moved['device'] = target
             return moved
+        return past_key_values
+
+    def slice_past_key_values(self, past_key_values: Any, keep_first_tokens: int) -> Any:
+        if isinstance(past_key_values, dict):
+            keep = max(int(keep_first_tokens), 0)
+            was_compressed = bool(past_key_values.get('compressed'))
+            source = self.decompress_kv_cache(past_key_values) if was_compressed else past_key_values
+            tokens = tuple(source.get('tokens', ()))[:keep]
+            sliced = dict(past_key_values)
+            sliced['tokens'] = tokens
+            sliced['prefix_len'] = len(tokens) if tokens else min(int(past_key_values.get('prefix_len', 0)), keep)
+            sliced['compressed'] = False
+            return sliced
         return past_key_values
 
 
@@ -220,7 +307,9 @@ class HuggingFaceBackend(Backend):
 
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         if self.device.startswith('cuda'):
-            return float(0.6 * max(token_count, 0) + 5.0)
+            beta = float(CONFIG.get('hardware.beta_prefill_ms_per_token', 0.60))
+            delta = float(CONFIG.get('hardware.reuse_fixed_overhead_ms', 2.0))
+            return float(beta * max(token_count, 0) + max(delta, 5.0))
         return float(1.1 * max(token_count, 0) + 8.0)
 
     def prepare_past_key_values(self, past_key_values: Any) -> Any:
@@ -235,25 +324,59 @@ class HuggingFaceBackend(Backend):
             return past_key_values
         if isinstance(past_key_values, tuple):
             from transformers.cache_utils import DynamicCache
-            return DynamicCache.from_legacy_cache(past_key_values)
+            if hasattr(DynamicCache, "from_legacy_cache"):
+                return DynamicCache.from_legacy_cache(past_key_values)
+            cache = DynamicCache()
+            for k, v in past_key_values:
+                cache.key_cache.append(k)
+                cache.value_cache.append(v)
+            return cache
         return past_key_values
+
+    def _legacy_past_key_values(self, past_key_values: Any) -> Any:
+        if past_key_values is None or isinstance(past_key_values, tuple):
+            return past_key_values
+        if hasattr(past_key_values, "to_legacy_cache"):
+            try:
+                legacy = past_key_values.to_legacy_cache()
+                if legacy is not None:
+                    return legacy
+            except Exception:
+                pass
+        key_cache = getattr(past_key_values, "key_cache", None)
+        value_cache = getattr(past_key_values, "value_cache", None)
+        if key_cache is not None and value_cache is not None:
+            try:
+                return tuple((k, v) for k, v in zip(key_cache, value_cache))
+            except Exception:
+                return past_key_values
+        return past_key_values
+
+    def _map_legacy_past_tensors(self, past_key_values: Any, transform) -> Any:
+        legacy = self._legacy_past_key_values(past_key_values)
+        if legacy is None:
+            return None
+        if not isinstance(legacy, tuple):
+            return past_key_values
+        mapped_layers = []
+        for layer in legacy:
+            mapped_layer = []
+            for tensor in layer:
+                if tensor is None:
+                    mapped_layer.append(None)
+                else:
+                    mapped_layer.append(transform(tensor))
+            mapped_layers.append(tuple(mapped_layer))
+        return tuple(mapped_layers)
 
     def move_kv_cache(self, past_key_values: Any, target: str) -> Any:
         if past_key_values is None:
             return None
-        moved_layers = []
         try:
-            for layer in past_key_values:
-                moved_layer = []
-                for t in layer:
-                    if t is None:
-                        moved_layer.append(None)
-                    elif hasattr(t, 'to'):
-                        moved_layer.append(t.to(target))
-                    else:
-                        moved_layer.append(t)
-                moved_layers.append(tuple(moved_layer))
-            return tuple(moved_layers)
+            return self._map_legacy_past_tensors(
+                past_key_values,
+                lambda t: t.to(target) if hasattr(t, 'to') else t,
+            )
         except Exception as exc:
             raise RuntimeError(f'Failed to move past_key_values to {target!r} for model {self.model_name!r}') from exc
 
@@ -263,8 +386,17 @@ class HuggingFaceBackend(Backend):
     def _past_length(self, past_key_values: Any) -> int:
         if past_key_values is None:
             return 0
+        if hasattr(past_key_values, "get_seq_length"):
+            for args in ((), (0,)):
+                try:
+                    value = past_key_values.get_seq_length(*args)
+                    if value is not None:
+                        return int(value)
+                except Exception:
+                    continue
+        legacy = self._legacy_past_key_values(past_key_values)
         try:
-            first_layer = past_key_values[0]
+            first_layer = legacy[0]
             first_tensor = first_layer[0]
             return int(first_tensor.shape[-2])
         except Exception:
@@ -276,19 +408,25 @@ class HuggingFaceBackend(Backend):
         if keep_last_tokens <= 0:
             return None
         try:
-            trimmed_layers = []
-            for layer in past_key_values:
-                trimmed_layer = []
-                for tensor in layer:
-                    if tensor.shape[-2] > keep_last_tokens:
-                        trimmed_tensor = tensor[..., -keep_last_tokens:, :]
-                    else:
-                        trimmed_tensor = tensor
-                    trimmed_layer.append(trimmed_tensor)
-                trimmed_layers.append(tuple(trimmed_layer))
-            return tuple(trimmed_layers)
+            return self._map_legacy_past_tensors(
+                past_key_values,
+                lambda tensor: tensor[..., -keep_last_tokens:, :] if getattr(tensor, "shape", [0, 0])[-2] > keep_last_tokens else tensor,
+            )
         except Exception:
             return past_key_values
+
+    def slice_past_key_values(self, past_key_values: Any, keep_first_tokens: int) -> Any:
+        if past_key_values is None:
+            return None
+        if keep_first_tokens <= 0:
+            return None
+        try:
+            return self._map_legacy_past_tensors(
+                past_key_values,
+                lambda tensor: tensor[..., :keep_first_tokens, :] if getattr(tensor, "shape", [0, 0])[-2] > keep_first_tokens else tensor,
+            )
+        except Exception as exc:
+            raise RuntimeError(f'Failed to slice past_key_values to {keep_first_tokens} tokens for model {self.model_name!r}') from exc
 
     def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
         tokens = list(tokens)
@@ -328,15 +466,15 @@ class HuggingFaceBackend(Backend):
         prepared_past_length = self._past_length(prepared_kv)
         if len(tokens) == 0:
             return PrefillResult(
-                kv_cache=prepared_kv,
-                latency_ms=cache_prepare_latency_ms,
-                memory_bytes=estimate_past_key_values_bytes(prepared_kv),
-                device=self.device,
-                gpu_utilization_pct=None,
-                used_past_key_values=prepared_past_length > 0,
-                cache_prepare_latency_ms=cache_prepare_latency_ms,
-                prepared_past_length=prepared_past_length,
-            )
+            kv_cache=prepared_kv,
+            latency_ms=cache_prepare_latency_ms,
+            memory_bytes=estimate_past_key_values_bytes(prepared_kv),
+            device=self.device,
+            gpu_utilization_pct=None,
+            used_past_key_values=prepared_past_length > 0,
+            cache_prepare_latency_ms=cache_prepare_latency_ms,
+            prepared_past_length=prepared_past_length,
+        )
 
         input_ids = self.torch.tensor([tokens], dtype=self.torch.long, device=self.device)
         position_ids = self.torch.arange(past_len, past_len + len(tokens), dtype=self.torch.long, device=self.device).unsqueeze(0)
@@ -393,6 +531,17 @@ class HuggingFaceBackend(Backend):
 
 
 class VLLMBackend(Backend):
+    """INLINE DEPRECATED — use the external HTTP adapter for benchmarks.
+
+    This class instantiates vLLM's LLM directly inside the engine process.
+    It cannot pass external ``past_key_values`` and estimates rather than
+    measures cache reuse.  The sweep uses
+    ``literature_accurate_baselines/run_runtime_cache_baseline.py`` with a
+    separate ``vllm serve --enable-prefix-caching`` server instead, because
+    that path captures real ``cached_tokens`` from the API response.
+
+    Kept here for backwards-compatibility with code that calls ``load_backend("vllm")``.
+    """
     backend_name = 'vllm'
     default_min_reuse_prefix_tokens = 48
     default_min_store_prefix_tokens = 32
@@ -447,29 +596,12 @@ class VLLMBackend(Backend):
 
         Returns symmetric total-variation distance over the union of top-k
         token ids from both next-token distributions. Lower is safer.
+
+        Note: vLLM does not natively expose raw logits for arbitrary prefixes
+        without generation overhead. We return None to safely fall back to
+        the lightweight semantic token-overlap metric in the sandbox.
         """
-        if not prefix_a or not prefix_b:
-            return None
-        max_len = max(min(len(prefix_a), len(prefix_b), self.max_positions), 1)
-        a = list(prefix_a)[-max_len:]
-        b = list(prefix_b)[-max_len:]
-        try:
-            with self.torch.no_grad():
-                ids_a = self.torch.tensor([a], dtype=self.torch.long, device=self.device)
-                ids_b = self.torch.tensor([b], dtype=self.torch.long, device=self.device)
-                logits_a = self.model(input_ids=ids_a, use_cache=False).logits[0, -1].float()
-                logits_b = self.model(input_ids=ids_b, use_cache=False).logits[0, -1].float()
-                if self.device.startswith('cuda'):
-                    self.torch.cuda.synchronize()
-                k = int(max(min(top_k, logits_a.numel(), logits_b.numel()), 1))
-                top_a = self.torch.topk(logits_a, k).indices
-                top_b = self.torch.topk(logits_b, k).indices
-                union = self.torch.unique(self.torch.cat([top_a, top_b]))
-                pa = self.torch.softmax(logits_a[union], dim=-1)
-                pb = self.torch.softmax(logits_b[union], dim=-1)
-                return float(0.5 * self.torch.sum(self.torch.abs(pa - pb)).item())
-        except Exception:
-            return None
+        return None
 
     def estimate_prefill_cost_ms(self, token_count: int) -> float:
         return float(0.35 * max(token_count, 0) + 4.0)
@@ -483,7 +615,7 @@ class VLLMBackend(Backend):
         prompt_token_ids = [list(tokens)]
         util_before = _read_gpu_utilization(self._nvml)
         start = time.perf_counter()
-        outputs = self.llm.generate(prompt_token_ids=prompt_token_ids, sampling_params=self.sampling_params, use_tqdm=False)
+        outputs = self.llm.generate(prompts=[{"prompt_token_ids": list(tokens)}], sampling_params=self.sampling_params, use_tqdm=False)
         latency_ms = (time.perf_counter() - start) * 1000.0
         util_after = _read_gpu_utilization(self._nvml)
         util = None
@@ -534,9 +666,80 @@ def _read_gpu_utilization(nvml_state: Any) -> float | None:
         return None
     try:
         pynvml, handle = nvml_state
-        return float(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
+        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+        return float(util.gpu)
     except Exception:
         return None
+
+
+class HybridBackend(Backend):
+    """A backend that can delegate to multiple backends with fallback support."""
+
+    def __init__(self, primary_backend: Backend, secondary_backend: Backend):
+        self.primary_backend = primary_backend
+        self.secondary_backend = secondary_backend
+        self.device = primary_backend.device
+        self.backend_name = f"hybrid_{primary_backend.backend_name}_{secondary_backend.backend_name}"
+
+    def tokenize(self, text: str) -> Tuple[int, ...]:
+        try:
+            return self.primary_backend.tokenize(text)
+        except Exception:
+            return self.secondary_backend.tokenize(text)
+
+    def decode(self, tokens: Sequence[int]) -> str:
+        try:
+            return self.primary_backend.decode(tokens)
+        except Exception:
+            return self.secondary_backend.decode(tokens)
+
+    def prefill(self, tokens: Sequence[int], past_key_values: Any = None) -> PrefillResult:
+        try:
+            return self.primary_backend.prefill(tokens, past_key_values)
+        except Exception:
+            return self.secondary_backend.prefill(tokens, past_key_values)
+
+    def logit_guard_distance(self, prefix_a: Sequence[int], prefix_b: Sequence[int], top_k: int = 32) -> float | None:
+        try:
+            return self.primary_backend.logit_guard_distance(prefix_a, prefix_b, top_k)
+        except Exception:
+            return self.secondary_backend.logit_guard_distance(prefix_a, prefix_b, top_k)
+
+    def prepare_past_key_values(self, past_key_values: Any) -> Any:
+        try:
+            return self.primary_backend.prepare_past_key_values(past_key_values)
+        except Exception:
+            return self.secondary_backend.prepare_past_key_values(past_key_values)
+
+    def move_kv_cache(self, past_key_values: Any, target: str) -> Any:
+        try:
+            return self.primary_backend.move_kv_cache(past_key_values, target)
+        except Exception:
+            return self.secondary_backend.move_kv_cache(past_key_values, target)
+
+    def compress_kv_cache(self, past_key_values: Any) -> Any:
+        try:
+            return self.primary_backend.compress_kv_cache(past_key_values)
+        except Exception:
+            return self.secondary_backend.compress_kv_cache(past_key_values)
+
+    def decompress_kv_cache(self, past_key_values: Any) -> Any:
+        try:
+            return self.primary_backend.decompress_kv_cache(past_key_values)
+        except Exception:
+            return self.secondary_backend.decompress_kv_cache(past_key_values)
+
+    def estimate_prefill_cost_ms(self, token_count: int) -> float:
+        # Use the faster backend's estimate
+        primary_estimate = self.primary_backend.estimate_prefill_cost_ms(token_count)
+        secondary_estimate = self.secondary_backend.estimate_prefill_cost_ms(token_count)
+        return min(primary_estimate, secondary_estimate)
+
+    def estimate_kv_cache_bytes(self, token_count: int) -> int:
+        # Use the more memory-efficient backend's estimate
+        primary_estimate = self.primary_backend.estimate_kv_cache_bytes(token_count)
+        secondary_estimate = self.secondary_backend.estimate_kv_cache_bytes(token_count)
+        return min(primary_estimate, secondary_estimate)
 
 
 def supports_gpu() -> bool:

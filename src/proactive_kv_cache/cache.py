@@ -6,6 +6,7 @@ from collections import deque
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+from functools import lru_cache
 
 
 @dataclass
@@ -14,7 +15,7 @@ class CacheEntry:
     kv_cache: Any
     frequency: float
     last_access: float
-    generation_cost_ms: float
+    prefill_cost_ms: float
     memory_bytes: int
     tier: str = 'cpu'
     created_at: float = field(default_factory=time.time)
@@ -28,7 +29,7 @@ class CacheEntry:
         age = max(now - self.last_access, 0.0)
         recency = 1.0 / (1.0 + age / 30.0)
         effective_len = min(len(self.prefix_tokens), 32)
-        savings_density = (self.frequency * self.generation_cost_ms * max(effective_len, 1)) / max(self.memory_bytes, 1)
+        savings_density = (self.frequency * self.prefill_cost_ms * max(effective_len, 1)) / max(self.memory_bytes, 1)
         tier_bonus = 0.05 if self.tier == 'gpu' else 0.0
         speculative_penalty = 0.05 if self.was_speculative and not self.speculative_reused else 0.0
         short_prefix_bonus = 0.03 if len(self.prefix_tokens) <= 16 else 0.0
@@ -36,11 +37,27 @@ class CacheEntry:
 
 
 class TieredStateBank:
-    def __init__(self, max_memory_bytes: int, ema_alpha: float = 0.2, min_match_length: int = 3):
-        self.max_memory_bytes = max_memory_bytes
+    def __init__(
+        self,
+        max_gpu_memory_bytes: int = 0,
+        max_cpu_memory_bytes: int = 0,
+        max_disk_memory_bytes: int = 0,
+        ema_alpha: float = 0.2,
+        min_match_length: int = 3,
+        max_memory_bytes: int = 0,
+    ):
+        # Backward-compat: if the old single-budget arg is passed, assign all to CPU
+        # (old tests are CPU-only scenarios with no GPU tier).
+        if max_memory_bytes > 0 and max_gpu_memory_bytes == 0 and max_cpu_memory_bytes == 0:
+            max_gpu_memory_bytes = 0
+            max_cpu_memory_bytes = max_memory_bytes
+        self.max_gpu_memory_bytes = max_gpu_memory_bytes
+        self.max_cpu_memory_bytes = max_cpu_memory_bytes
+        self.max_disk_memory_bytes = max_disk_memory_bytes
         self.ema_alpha = ema_alpha
         self.min_match_length = min_match_length
         self.entries: Dict[Tuple[int, ...], CacheEntry] = {}
+        self.disk_entries: Dict[Tuple[int, ...], CacheEntry] = {}
         self.frequency_counter: Dict[Tuple[int, ...], float] = defaultdict(float)
         self._last_frequency_step: Dict[Tuple[int, ...], int] = defaultdict(int)
         self._frequency_step = 0
@@ -48,8 +65,16 @@ class TieredStateBank:
         self.recent_queries: deque[Tuple[int, ...]] = deque(maxlen=48)
         self.recent_query_times: deque[float] = deque(maxlen=48)
         self.continuation_tokens: Dict[Tuple[int, ...], set[int]] = defaultdict(set)
+        # Trie for prefix matching (reverted from suffix array)
         self._entry_trie: Dict[str, Any] = {'children': {}, 'entry_key': None}
-        self.current_memory_bytes = 0
+        # Add hash map for O(1) exact match lookups
+        self._exact_match_cache: Dict[Tuple[int, ...], CacheEntry] = {}
+        # Add LRU cache for recent prefix lookups to avoid repeated trie traversals
+        self._recent_match_cache: Dict[Tuple[int, ...], Tuple[Tuple[int, ...], CacheEntry, int]] = {}
+        self._recent_match_cache_keys: deque[Tuple[int, ...]] = deque(maxlen=64)
+        self.current_gpu_memory_bytes = 0
+        self.current_cpu_memory_bytes = 0
+        self.current_disk_memory_bytes = 0
         self.metrics = {
             'hits': 0,
             'misses': 0,
@@ -62,12 +87,46 @@ class TieredStateBank:
             'demotions': 0,
             'bypassed_matches': 0,
             'reuse_failures': 0,
+            'disk_evictions': 0,
+            'disk_promotions': 0,
         }
         self._lock = threading.RLock()
 
     def add_metric(self, name: str, value: float = 1.0) -> None:
         with self._lock:
-            self.metrics[name] = self.metrics.get(name, 0.0) + value
+            self.metrics[name] = self.metrics.get(name, 0) + value
+
+    def demote_to_disk(self, prefix_tokens: Tuple[int, ...]) -> bool:
+        with self._lock:
+            if prefix_tokens not in self.entries:
+                return False
+            entry = self.entries[prefix_tokens]
+            if self.current_disk_memory_bytes + entry.memory_bytes > self.max_disk_memory_bytes:
+                return False
+            self.disk_entries[prefix_tokens] = entry
+            self.current_disk_memory_bytes += entry.memory_bytes
+            self._remove_unlocked(prefix_tokens, count_speculative_waste=False)
+            self.metrics['disk_evictions'] += 1
+            return True
+
+    def promote_from_disk(self, prefix_tokens: Tuple[int, ...], target_tier: str = 'cpu') -> bool:
+        with self._lock:
+            if prefix_tokens not in self.disk_entries:
+                return False
+            entry = self.disk_entries[prefix_tokens]
+            limit = self.max_gpu_memory_bytes if target_tier == 'gpu' else self.max_cpu_memory_bytes
+            current_used = self.current_gpu_memory_bytes if target_tier == 'gpu' else self.current_cpu_memory_bytes
+            if current_used + entry.memory_bytes > limit:
+                return False
+            self.entries[prefix_tokens] = entry
+            if target_tier == 'gpu':
+                self.current_gpu_memory_bytes += entry.memory_bytes
+            else:
+                self.current_cpu_memory_bytes += entry.memory_bytes
+            del self.disk_entries[prefix_tokens]
+            self.current_disk_memory_bytes -= entry.memory_bytes
+            self.metrics['disk_promotions'] += 1
+            return True
 
     def default_prefix_lengths(self, tokens: Tuple[int, ...]) -> List[int]:
         return self._default_prefix_lengths(tokens)
@@ -76,9 +135,19 @@ class TieredStateBank:
         with self._lock:
             return prefix_tokens in self.entries
 
+    @property
+    def max_memory_bytes(self) -> int:
+        """Total memory budget (GPU + CPU). Used by policy.py for pressure calculation."""
+        return self.max_gpu_memory_bytes + self.max_cpu_memory_bytes
+
+    @property
+    def current_memory_bytes(self) -> int:
+        """Total currently used memory (GPU + CPU)."""
+        return self.current_gpu_memory_bytes + self.current_cpu_memory_bytes
+
     def get_memory_bytes(self) -> int:
         with self._lock:
-            return self.current_memory_bytes
+            return self.current_gpu_memory_bytes + self.current_cpu_memory_bytes
 
     def get_frequency(self, prefix_tokens: Tuple[int, ...]) -> float:
         with self._lock:
@@ -200,7 +269,7 @@ class TieredStateBank:
                 if not entry.speculative_reused:
                     entry.speculative_reused = True
                     entry.first_reuse_at = time.time()
-                self.metrics['useful_speculative_savings_ms'] += float(entry.generation_cost_ms)
+                self.metrics['useful_speculative_savings_ms'] += float(entry.prefill_cost_ms)
             return entry
 
     def lookup(self, tokens: Tuple[int, ...]) -> Optional[Tuple[Tuple[int, ...], CacheEntry, int]]:
@@ -218,77 +287,143 @@ class TieredStateBank:
     def store(
         self,
         prefix_tokens: Tuple[int, ...],
-        kv_cache: Any,
-        generation_cost_ms: float,
+        past_key_values: Any,
+        prefill_cost_ms: float,
         memory_bytes: int,
         is_speculative: bool,
         tier: str = 'cpu',
     ) -> bool:
         if len(prefix_tokens) < self.min_match_length:
             return False
-        if memory_bytes > self.max_memory_bytes:
+        
+        limit = self.max_gpu_memory_bytes if tier == 'gpu' else self.max_cpu_memory_bytes
+        if memory_bytes > limit:
             return False
 
         with self._lock:
-            if prefix_tokens in self.entries:
-                self._remove_unlocked(prefix_tokens, count_speculative_waste=False)
-
-            while self.current_memory_bytes + memory_bytes > self.max_memory_bytes:
-                if not self._evict_one_unlocked():
-                    return False
-
-            entry = CacheEntry(
-                prefix_tokens=prefix_tokens,
-                kv_cache=kv_cache,
-                frequency=self._decayed_frequency_unlocked(prefix_tokens) or 0.02,
-                last_access=time.time(),
-                generation_cost_ms=generation_cost_ms,
-                memory_bytes=memory_bytes,
-                tier=tier,
-                was_speculative=is_speculative,
-                speculative_reused=False,
-                first_reuse_at=None,
-            )
-            self.entries[prefix_tokens] = entry
-            self._trie_insert_unlocked(prefix_tokens)
-            self.current_memory_bytes += memory_bytes
-            if tier == 'gpu':
-                self.metrics['promotions'] += 1
-            return True
+            # Check if we can store directly in the requested tier
+            current_used = self.current_gpu_memory_bytes if tier == 'gpu' else self.current_cpu_memory_bytes
+            if current_used + memory_bytes <= limit:
+                if prefix_tokens in self.entries:
+                    self._remove_unlocked(prefix_tokens, count_speculative_waste=False)
+                
+                entry = CacheEntry(
+                    prefix_tokens=prefix_tokens,
+                    kv_cache=past_key_values,
+                    frequency=self._decayed_frequency_unlocked(prefix_tokens) or 0.02,
+                    last_access=time.time(),
+                    prefill_cost_ms=prefill_cost_ms,
+                    memory_bytes=memory_bytes,
+                    tier=tier,
+                    was_speculative=is_speculative,
+                    speculative_reused=False,
+                    first_reuse_at=None,
+                )
+                self.entries[prefix_tokens] = entry
+                # Insert into trie for prefix matching (reverted from suffix array)
+                self._trie_insert_unlocked(prefix_tokens)
+                # Add to exact match cache as well
+                self._exact_match_cache[prefix_tokens] = entry
+                # Invalidate lru_cache-backed lookup results; otherwise a prior miss for
+                # a longer request remains cached even after storing its prefix.
+                self._find_match_unlocked.cache_clear()
+                self._recent_match_cache.clear()
+                self._recent_match_cache_keys.clear()
+                if tier == 'gpu':
+                    self.current_gpu_memory_bytes += memory_bytes
+                    self.metrics['promotions'] += 1
+                else:
+                    self.current_cpu_memory_bytes += memory_bytes
+                return True
+            
+            # If the requested tier is full, try to evict to make space
+            if self._evict_one_unlocked(target_tier=tier):
+                # After eviction, try storing again
+                return self.store(prefix_tokens, past_key_values, prefill_cost_ms, memory_bytes, is_speculative, tier)
+            
+            # If we still can't store in the requested tier, try storing in disk if available
+            if self.max_disk_memory_bytes > 0 and memory_bytes <= self.max_disk_memory_bytes:
+                if prefix_tokens in self.entries:
+                    self._remove_unlocked(prefix_tokens, count_speculative_waste=False)
+                
+                entry = CacheEntry(
+                    prefix_tokens=prefix_tokens,
+                    kv_cache=past_key_values,
+                    frequency=self._decayed_frequency_unlocked(prefix_tokens) or 0.02,
+                    last_access=time.time(),
+                    prefill_cost_ms=prefill_cost_ms,
+                    memory_bytes=memory_bytes,
+                    tier='disk',
+                    was_speculative=is_speculative,
+                    speculative_reused=False,
+                    first_reuse_at=None,
+                )
+                self.disk_entries[prefix_tokens] = entry
+                self.current_disk_memory_bytes += memory_bytes
+                return True
+            
+            return False
 
     def promote(self, prefix_tokens: Tuple[int, ...], new_cache: Any, new_memory_bytes: int, new_tier: str = 'gpu') -> bool:
         with self._lock:
             entry = self.entries.get(prefix_tokens)
-            if entry is None:
+            if entry is None or new_tier != 'gpu':
                 return False
 
             old_size = entry.memory_bytes
-            while self.current_memory_bytes - old_size + new_memory_bytes > self.max_memory_bytes:
-                if not self._evict_one_unlocked(exclude_key=prefix_tokens):
+            old_tier = entry.tier
+            
+            while self.current_gpu_memory_bytes + new_memory_bytes > self.max_gpu_memory_bytes:
+                if not self._evict_one_unlocked(exclude_key=prefix_tokens, target_tier='gpu'):
                     return False
 
-            self.current_memory_bytes = self.current_memory_bytes - old_size + new_memory_bytes
+            if old_tier == 'gpu':
+                self.current_gpu_memory_bytes -= old_size
+            else:
+                self.current_cpu_memory_bytes -= old_size
+                
+            self.current_gpu_memory_bytes += new_memory_bytes
             entry.kv_cache = new_cache
             entry.memory_bytes = new_memory_bytes
             if entry.tier != new_tier:
                 self.metrics['promotions'] += 1
             entry.tier = new_tier
             entry.last_access = time.time()
+            self._exact_match_cache[prefix_tokens] = entry
+            self._find_match_unlocked.cache_clear()
+            self._recent_match_cache.clear()
+            self._recent_match_cache_keys.clear()
             return True
 
     def demote(self, prefix_tokens: Tuple[int, ...], new_cache: Any, new_memory_bytes: int, new_tier: str = 'cpu') -> bool:
         with self._lock:
             entry = self.entries.get(prefix_tokens)
-            if entry is None:
+            if entry is None or new_tier != 'cpu':
                 return False
 
-            self.current_memory_bytes = self.current_memory_bytes - entry.memory_bytes + new_memory_bytes
+            old_size = entry.memory_bytes
+            old_tier = entry.tier
+
+            while self.current_cpu_memory_bytes + new_memory_bytes > self.max_cpu_memory_bytes:
+                if not self._evict_one_unlocked(exclude_key=prefix_tokens, target_tier='cpu'):
+                    return False
+
+            if old_tier == 'gpu':
+                self.current_gpu_memory_bytes -= old_size
+            else:
+                self.current_cpu_memory_bytes -= old_size
+
+            self.current_cpu_memory_bytes += new_memory_bytes
             entry.kv_cache = new_cache
             entry.memory_bytes = new_memory_bytes
             if entry.tier != new_tier:
                 self.metrics['demotions'] += 1
             entry.tier = new_tier
             entry.last_access = time.time()
+            self._exact_match_cache[prefix_tokens] = entry
+            self._find_match_unlocked.cache_clear()
+            self._recent_match_cache.clear()
+            self._recent_match_cache_keys.clear()
             return True
 
     def remove(self, prefix_tokens: Tuple[int, ...]) -> None:
@@ -332,46 +467,134 @@ class TieredStateBank:
                 **tier_counts,
                 'entries_stored': len(self.entries),
                 'pending_speculative_entries': pending_speculative_entries,
-                'memory_used_mb': self.current_memory_bytes / (1024 ** 2),
+                'memory_used_mb': (self.current_gpu_memory_bytes + self.current_cpu_memory_bytes) / (1024 ** 2),
+                'gpu_memory_used_mb': self.current_gpu_memory_bytes / (1024 ** 2),
+                'cpu_memory_used_mb': self.current_cpu_memory_bytes / (1024 ** 2),
                 'hit_rate': self.metrics['hits'] / max(total, 1),
                 'speculative_hit_rate': self.metrics['speculative_hits'] / max(self.metrics['hits'], 1),
             }
 
+    @lru_cache(maxsize=1024)
     def _find_match_unlocked(self, tokens: Tuple[int, ...]) -> Optional[Tuple[Tuple[int, ...], CacheEntry, int]]:
+        # Debug logging
+        if False:  # Set to True to enable debug logging
+            print(f"DEBUG: Looking for match for tokens: {tokens}")
+            print(f"DEBUG: Exact match cache size: {len(self._exact_match_cache)}")
+            print(f"DEBUG: Recent match cache size: {len(self._recent_match_cache)}")
+            print(f"DEBUG: Total entries: {len(self.entries)}")
+            print(f"DEBUG: Min match length: {self.min_match_length}")
+         
+        # First check if we have an exact match in our cache
+        if tokens in self._exact_match_cache:
+            entry = self._exact_match_cache[tokens]
+            if False:
+                print(f"DEBUG: Found exact match for {tokens}")
+            return tokens, entry, len(tokens)
+         
+        # Then check if we have a recent prefix match cached
+        if tokens in self._recent_match_cache:
+            if False:
+                print(f"DEBUG: Found recent match for {tokens}")
+            return self._recent_match_cache[tokens]
+         
+        # Fall back to trie traversal for general prefix matching (reverted from suffix array)
         node = self._entry_trie
         best_key = node.get('entry_key')
         best_len = 0
+        
+        if False:
+            print(f"DEBUG: Starting trie traversal from root")
+            print(f"DEBUG: Root entry_key: {best_key}")
+         
         for idx, token in enumerate(tokens, start=1):
             children = node.get('children', {})
             if token not in children:
+                if False:
+                    print(f"DEBUG: Trie traversal broke at token {idx}: {token}")
                 break
             node = children[token]
             entry_key = node.get('entry_key')
             if entry_key is not None:
                 best_key = entry_key
                 best_len = idx
+                if False:
+                    print(f"DEBUG: Found potential match at length {best_len}: {best_key}")
+         
+        if False:
+            print(f"DEBUG: Best match found - key: {best_key}, length: {best_len}")
+         
         if best_key is None or best_len < self.min_match_length:
+            if False:
+                print(f"DEBUG: No valid match found (best_len={best_len}, min={self.min_match_length})")
             return None
+             
         entry = self.entries.get(best_key)
         if entry is None:
+            if False:
+                print(f"DEBUG: Best key {best_key} not found in entries")
             return None
-        return best_key, entry, best_len
+             
+        result = (best_key, entry, best_len)
+        
+        if False:
+            print(f"DEBUG: Returning match: prefix={best_key[:10]}..., length={best_len}")
+         
+        # Cache the result for future lookups
+        if best_len == len(tokens):
+            # Exact match - cache it for O(1) lookup next time
+            self._exact_match_cache[tokens] = entry
+            if False:
+                print(f"DEBUG: Cached exact match for {tokens}")
+        else:
+            # Partial match - cache it in recent match cache
+            self._recent_match_cache[tokens] = result
+            if False:
+                print(f"DEBUG: Cached partial match for {tokens}")
+        return result
 
     def _remove_unlocked(self, prefix_tokens: Tuple[int, ...], count_speculative_waste: bool = True) -> None:
         entry = self.entries.pop(prefix_tokens, None)
         if entry is None:
             return
         self._trie_remove_unlocked(prefix_tokens)
-        self.current_memory_bytes -= entry.memory_bytes
+        self._exact_match_cache.pop(prefix_tokens, None)
+        self._find_match_unlocked.cache_clear()
+        self._recent_match_cache.clear()
+        self._recent_match_cache_keys.clear()
+        if entry.tier == 'gpu':
+            self.current_gpu_memory_bytes -= entry.memory_bytes
+        else:
+            self.current_cpu_memory_bytes -= entry.memory_bytes
+             
         if count_speculative_waste and entry.was_speculative and not entry.speculative_reused and not entry.speculative_waste_recorded:
             self._mark_speculative_wasted_unlocked(entry)
 
-    def _evict_one_unlocked(self, exclude_key: Tuple[int, ...] | None = None) -> bool:
+    def _evict_one_unlocked(self, exclude_key: Tuple[int, ...] | None = None, target_tier: str | None = None) -> bool:
         keys = [k for k in self.entries if k != exclude_key]
+        if target_tier is not None:
+            tier_keys = [k for k in keys if self.entries[k].tier == target_tier]
+            if tier_keys:
+                keys = tier_keys
+        
         if not keys:
             return False
+         
         now = time.time()
+        # Direct use of utility score
         worst_key = min(keys, key=lambda k: self.entries[k].utility_score(now))
+        
+        # If demoting from GPU to CPU, don't just delete it, change tier and push to CPU if CPU has space
+        entry = self.entries[worst_key]
+        if target_tier == 'gpu' and entry.tier == 'gpu':
+            if self.current_cpu_memory_bytes + entry.memory_bytes <= self.max_cpu_memory_bytes:
+                self.demote(worst_key, entry.kv_cache, entry.memory_bytes, new_tier='cpu')
+                return True
+        
+        # Try to demote to disk before evicting completely
+        if self.max_disk_memory_bytes > 0:
+            if self.demote_to_disk(worst_key):
+                return True
+                 
         self._remove_unlocked(worst_key)
         self.metrics['evictions'] += 1
         return True
@@ -393,7 +616,7 @@ class TieredStateBank:
         if entry.speculative_waste_recorded:
             return
         self.metrics['wasted_precomputes'] += 1
-        self.metrics['wasted_compute_ms'] += float(entry.generation_cost_ms)
+        self.metrics['wasted_compute_ms'] += float(entry.prefill_cost_ms)
         entry.speculative_waste_recorded = True
 
     def _decayed_frequency_unlocked(self, prefix_tokens: Tuple[int, ...]) -> float:

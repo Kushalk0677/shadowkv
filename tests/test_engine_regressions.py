@@ -104,6 +104,30 @@ def test_reactive_engine_treats_internal_backend_cache_fallback_as_miss():
     assert engine.engine_metrics['reuse_failures'] >= 1
 
 
+def test_base_batch_speculation_stores_with_bank_api():
+    backend = FakeBackend()
+    engine = ReactivePrefixCacheEngine(backend=backend)
+    tokens = (1, 2, 3, 4, 5, 6)
+    engine.bank.observe_query(tokens)
+    engine.last_request_time = time.time() - 2.0
+
+    engine._speculate_batch(top_k=1)
+    engine.finalize()
+
+    assert engine.bank.contains(tokens)
+    assert engine.engine_metrics.get('speculative_precomputes', 0) == 1
+
+
+def test_base_finalize_stops_batch_speculation_worker():
+    engine = ReactivePrefixCacheEngine(backend=FakeBackend())
+
+    assert engine._speculation_thread is not None
+    engine.finalize()
+
+    assert engine._speculation_active is False
+    assert not engine._speculation_thread.is_alive()
+
+
 def test_shadowkv_reports_promoted_gpu_tier_consistently():
     backend = FakeBackend(device='cuda:0')
     engine = ShadowKVEngine(backend=backend, enable_gpu_tier=True)
@@ -285,7 +309,7 @@ def test_cost_aware_policy_uses_bootstrap_horizon_without_arrival_history():
 
     policy = CostAwareSlackPolicy(
         min_frequency=0.0,
-        ms_per_token=0.4,
+        prefill_ms_per_token=0.4,
         fixed_prefill_overhead_ms=0.1,
         memory_penalty_per_mb=0.0,
         kv_mb_per_token=0.001,
