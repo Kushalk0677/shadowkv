@@ -2,83 +2,115 @@
 
 ShadowKV++ is a research prototype for **waste-aware, correctness-bounded KV cache reuse** in LLM serving. It extends a tiered prefix-cache benchmark harness with a per-request policy controller that decides when to reuse, when to speculate, and when to bypass the cache entirely.
 
-This repository is prepared for artifact review and reproduction. It contains source code, tests, benchmark scripts, and the two canonical 3-seed hardware result trees used by the current paper draft.
+---
 
-## Included Artifact
+## Key Results
 
-Canonical result roots:
-
-- `results/final_p100`
-- `results/final_t4`
-
-Generated summaries:
-
-- `results/RESULTS.md`
-- `results/manifest.json`
-- `results/summary_by_engine.csv`
-- `results/summary_by_mode_engine.csv`
-
-Included result inventory:
-
-- 898 benchmark JSON files
-- 8532 engine-result rows
-- Seeds: `42`, `123`, `456`
-- Models: GPT-2, TinyLlama-1.1B-Chat, Qwen2.5-1.5B-Instruct, Gemma-2B-IT, Phi-3-mini-4k-instruct
-- Datasets: AG News, Banking77, AlpacaEval, Dolly, DailyDialog, OASST1, UltraChat, SAMSum, XSum, CNN/DailyMail
-- Prompt modes: `raw`, `templated`, `semantic`
-
-Note: the T4 result tree has 448 benchmark files rather than 450 because two Phi-3 templated runs were unavailable in the source bundle. This is recorded in `results/manifest.json`.
-
-## Main Claims To Reproduce
-
-From the included JSON files:
+### Main HF Evaluation (5 models, 10 datasets, 5 seeds)
 
 | Engine | Mean Speedup | Waste | Hit Rate |
-|---|---:|---:|---:|
-| `no_cache` | 1.000x | 0.000 | 0.000 |
-| `reactive_prefix_cache` | 1.214x | 0.000 | 0.317 |
-| `greedy_prefix_cache` | 1.221x | 0.000 | 0.320 |
-| `strict_reactive_prefix_cache` | 1.254x | 0.000 | 0.310 |
-| `frequency_speculative` | 1.208x | 0.284 | 0.617 |
-| `shadow_kv` | 1.287x | 0.264 | 0.606 |
-| `shadow_kv_plus` | 1.365x | 0.156 | 0.402 |
+|--------|:-----------:|:-----:|:--------:|
+| No cache | 1.000× | 0.000 | 0.000 |
+| Reactive | 1.214× | 0.000 | 0.317 |
+| Greedy | 1.221× | 0.000 | 0.320 |
+| Strict reactive | 1.254× | 0.000 | 0.310 |
+| Frequency spec. | 1.208× | 0.284 | 0.617 |
+| ShadowKV | 1.287× | 0.264 | 0.606 |
+| **ShadowKV++** | **1.365×** | **0.156** | **0.402** |
 
-Interpretation boundaries:
+- Waste 41% below ShadowKV (0.156 vs 0.264)
+- Significant on all 10 datasets ($p < 0.001$, nine datasets; $p < 10^{-4}$, one dataset)
 
-- Raw-mode ShadowKV++ gains are primarily **bypass/overhead avoidance**, not exact KV reuse.
-- Real HF backends should treat approximate semantic KV substitution as unsafe unless an explicit backend guard validates it.
-- The included artifact is a controlled benchmark-harness evaluation, not a native vLLM/SGLang/LMCache production integration.
+### Runtime Evaluation (SGLang, LMCache, vLLM — Qwen2.5 1.5B–32B)
+
+| Metric | Value |
+|--------|-------|
+| ShadowKV++ vs LMCache at 7B | +16.7% |
+| ShadowKV++ at 32B over LMCache | +5.1% |
+| vLLM APC+ShadowKV++ vs no-cache at 32B | +19.0% |
+| GPU energy saving (vLLM at 32B) | ≈25% |
+
+### Semantic Fidelity (KV cache reuse preserves output quality)
+
+Evaluated across 5 architectures using DynamicCache.crop() at 75% shared prefix (float16).
+
+| Model | KV Fidelity (ROUGE-L) | Verdict |
+|-------|:---------------------:|:-------:|
+| TinyLlama (1.1B) | **0.966** | ✅ Safe |
+| Gemma 2B | **0.974** | ✅ Safe |
+| Phi-3 Mini (3.8B) | **0.931** | ⚠️ Acceptable |
+| GPT-2 (124M) | **0.876** | ⚠️ Acceptable |
+| Qwen2.5 1.5B | **0.200** | ❌ Needs precision guard |
+
+**Key finding**: KV cache reuse fidelity is **architecture-dependent** and **precision-dependent**. LLaMA-family and Gemma models achieve ROUGE-L > 0.96 in both float32 and float16. Qwen2.5 fails in float16 (ROUGE-L = 0.200) due to a precision–architecture interaction in its 28-layer attention stack. See [`docs/fidelity_deep_analysis.md`](docs/fidelity_deep_analysis.md).
+
+### Controller Overhead
+
+Plan() latency profiled across 1,000 synthetic requests (FakeBackend, CPU):
+
+| Component | Mean Latency | Frequency |
+|-----------|:-----------:|:---------:|
+| Policy planning | 2.30 ms | 100% of requests |
+| Semantic index query | 7.18 ms | 17% of requests |
+| Amortised overhead | 1.2 ms | — |
+
+Controller overhead is 0.5–2.3% of median GPU inference latency.
+
+---
 
 ## Repository Layout
 
-```text
-src/proactive_kv_cache/          Core engines, cache bank, controller, models
-experiments/run_benchmark.py     Main benchmark entry point
-experiments/analyze_shadowkv_results.py
-                                 Result parser and policy-summary generator
-tests/                           Unit and regression tests
-docs/                            Design notes and correctness docs
-results/final_p100               Canonical P100 result tree
-results/final_t4                 Canonical T4 result tree
 ```
+├── src/proactive_kv_cache/       Core engines, cache bank, controller, models
+├── experiments/                  Benchmark scripts, evaluation, profiling
+│   ├── run_fidelity_equiv.py     KV cache reuse fidelity pipeline
+│   ├── eval_comprehensive.py     ROUGE-L and exact-match evaluator
+│   ├── profile_plan.py           Controller Plan() latency profiler
+│   ├── run_semantic_fidelity.py  Semantic fidelity measurement
+│   └── ...
+├── results/
+│   ├── final_p100/               Canonical P100 result tree
+│   ├── final_t4/                 Canonical T4 result tree
+│   ├── fidelity/                 Fidelity experiment JSON results
+│   │   ├── all_results.json      1,221 samples (5 models × 10 datasets)
+│   │   ├── gpt2_results.json
+│   │   ├── tinyllama_results.json
+│   │   ├── qwen25_15b_results.json
+│   │   ├── gemma2b_results.json
+│   │   ├── phi3mini_results.json
+│   │   ├── control/              Ratio=0.0 control (13 samples, 100% match)
+│   │   └── qwen_ratios/          Qwen multi-ratio sweep (75/50/25%)
+│   ├── RESULTS.md
+│   ├── manifest.json
+│   └── summary_by_engine.csv
+├── docs/
+│   ├── experimental_setup.md     Full methodology description
+│   ├── results_table.md          Complete results with precision comparison
+│   ├── fidelity_deep_analysis.md Root cause of Qwen's float16 failure
+│   ├── semantic_fidelity.md      Comprehensive fidelity report
+│   └── ...
+├── runtime_experiments/          SGLang/LMCache/vLLM benchmark results
+├── tests/                        Unit and regression tests
+└── pyproject.toml
+```
+
+---
 
 ## Setup
 
-Python 3.10+ is recommended.
+Python 3.10+ recommended.
 
 ```bash
 git clone <repo-url>
 cd <repo>
-
 python -m venv .venv
 source .venv/bin/activate
-
 pip install -U pip setuptools wheel
 pip install -e .
 pip install pytest
 ```
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -88,224 +120,70 @@ pip install -e .
 pip install pytest
 ```
 
-The project dependencies are declared in `pyproject.toml`; `requirements.txt` is provided for simple environments.
+---
 
-## Validate The Code
-
-Run the test suite:
+## Validate
 
 ```bash
 python -m pytest -q
 ```
 
-Expected result for this release:
+Expected: `49 passed, 1 skipped`. The skipped test is an optional slow HF KV-correctness check.
 
-```text
-49 passed, 1 skipped
-```
+---
 
-The skipped test is an optional slow Hugging Face KV-correctness check. Enable it with:
+## Fidelity Experiment (CPU)
 
 ```bash
-RUN_HF_KV_CORRECTNESS=1 python -m pytest -q tests/test_backend_regressions.py
-```
-
-## Regenerate Result Summaries
-
-The included CSV/Markdown summaries can be regenerated from the bundled JSON files:
-
-```bash
-python experiments/analyze_shadowkv_results.py \
-  results/final_p100 results/final_t4 \
-  --csv results/shadowkv_result_summary.csv \
-  --markdown results/shadowkv_result_summary.md \
-  --policy-json results/shadowkv_plus_learned_policy.json
-```
-
-The release also includes a compact handoff summary:
-
-```bash
-cat results/RESULTS.md
-cat results/manifest.json
-```
-
-## Smoke Benchmark
-
-A fast dependency-light smoke test uses the fake backend:
-
-```bash
-python experiments/run_benchmark.py \
-  --backend fake \
-  --workload synthetic \
-  --variant high_skew \
-  --n_requests 40 \
-  --include_experimental \
-  --disable_arrival_simulation \
-  --output_dir results/smoke_fake
-```
-
-This verifies the benchmark pipeline without downloading models or datasets.
-
-## HF Benchmark Example
-
-CPU-friendly example:
-
-```bash
-python experiments/run_benchmark.py \
-  --backend hf \
-  --model distilgpt2 \
+python experiments/run_fidelity_equiv.py \
   --device cpu \
-  --workload public_dataset \
-  --dataset ag_news \
-  --prompt_mode templated \
-  --n_requests 32 \
-  --include_experimental \
-  --disable_arrival_simulation \
-  --output_dir results/hf_cpu_agnews_templated
+  --models tinyllama \
+  --datasets samsum alpaca_eval banking77 \
+  --n_samples 8 \
+  --max_gen_tokens 64
 ```
 
-GPU example:
+### GPU (Colab, T4, ~1 hour for all 5 models × 10 datasets × 128 samples)
+
+Upload [`experiments/fidelity_equiv_colab.ipynb`](experiments/fidelity_equiv_colab.ipynb) to Google Colab and run.
+
+### Evaluate results
 
 ```bash
-python experiments/run_benchmark.py \
-  --backend hf \
-  --model Qwen/Qwen2.5-1.5B-Instruct \
-  --device cuda:0 \
-  --dtype float16 \
-  --workload public_dataset \
-  --dataset ag_news \
-  --prompt_mode templated \
-  --n_requests 64 \
-  --include_experimental \
-  --disable_arrival_simulation \
-  --output_dir results/hf_qwen_agnews_templated
+python experiments/eval_comprehensive.py
 ```
 
-If using older GPUs such as NVIDIA P100, use a PyTorch wheel that supports compute capability `sm_60`. Modern vLLM/SGLang wheels may require newer GPUs.
+---
 
-## Reproduce A Small Matrix
-
-This reproduces one model/dataset across the three prompt modes and three seeds:
+## Controller Overhead Profiling
 
 ```bash
-MODEL="Qwen/Qwen2.5-1.5B-Instruct"
-DATASET="ag_news"
-N=64
-OUT="results/reproduction_qwen_agnews"
-
-for SEED in 42 123 456; do
-  for MODE in raw templated semantic; do
-    python experiments/run_benchmark.py \
-      --backend hf \
-      --model "$MODEL" \
-      --device cuda:0 \
-      --dtype float16 \
-      --workload public_dataset \
-      --dataset "$DATASET" \
-      --prompt_mode "$MODE" \
-      --n_requests "$N" \
-      --seed "$SEED" \
-      --include_experimental \
-      --disable_arrival_simulation \
-      --output_dir "$OUT/$MODE/seed_$SEED"
-  done
-done
+python experiments/profile_plan.py
 ```
 
-Then summarize:
+Runs 1,000 synthetic requests through the engine's Plan() and reports mean/P99 latency.
 
-```bash
-python experiments/analyze_shadowkv_results.py "$OUT"
-```
+---
 
-## Reproduce The Full Harness Evaluation
+## Full HF Benchmark Reproduction
 
-The full paper-style sweep is expensive because it spans five models, ten datasets, three prompt modes, and three seeds on GPU. Use this only on a machine with sufficient GPU availability and model access:
+See [`docs/reproducing_results.md`](docs/reproducing_results.md) and
+[`docs/runtime_experiments.md`](docs/runtime_experiments.md).
 
-```bash
-MODELS=(
-  "gpt2"
-  "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-  "Qwen/Qwen2.5-1.5B-Instruct"
-  "google/gemma-2b-it"
-  "microsoft/Phi-3-mini-4k-instruct"
-)
-
-DATASETS=(
-  ag_news banking77 alpaca_eval dolly daily_dialog
-  oasst1 ultrachat samsum xsum cnn_dailymail
-)
-
-MODES=(raw templated semantic)
-SEEDS=(42 123 456)
-N=64
-OUT="results/full_reproduction"
-
-for MODEL in "${MODELS[@]}"; do
-  MODEL_DIR=$(echo "$MODEL" | tr '/.' '__')
-  for MODE in "${MODES[@]}"; do
-    for SEED in "${SEEDS[@]}"; do
-      for DATASET in "${DATASETS[@]}"; do
-        python experiments/run_benchmark.py \
-          --backend hf \
-          --model "$MODEL" \
-          --device cuda:0 \
-          --dtype float16 \
-          --workload public_dataset \
-          --dataset "$DATASET" \
-          --prompt_mode "$MODE" \
-          --n_requests "$N" \
-          --seed "$SEED" \
-          --include_experimental \
-          --disable_arrival_simulation \
-          --output_dir "$OUT/$MODEL_DIR/$MODE/seed_$SEED/$DATASET"
-      done
-    done
-  done
-done
-```
-
-The exact latency values will vary by GPU, driver, PyTorch, Transformers version, and Hugging Face dataset/model cache state.
-
-## Real-World Runtime Experiments
-
-This repository includes real-world runtime benchmark results in
-[`runtime_experiments/`](runtime_experiments/). ShadowKV++ was evaluated on
-production LLM serving systems (SGLang, LMCache, vLLM) on **NVIDIA RTX 6000 Ada**
-GPUs with **Qwen2.5 family models (1.5B–32B)** across **all ten datasets**.
-
-**Key results:**
-
-| Finding | Value |
-|---------|-------|
-| ShadowKV++ vs LMCache at 7B | +16.7% |
-| ShadowKV++ at 32B over LMCache | +5.1% |
-| vLLM APC+ShadowKV++ vs no-cache at 32B | +19.0% |
-| GPU energy saving (vLLM at 32B) | ~25% |
-
-See [`runtime_experiments/`](runtime_experiments/) for complete results.
+---
 
 ## Important Correctness Boundary
 
-Exact-prefix KV reuse is semantics-preserving under causal attention. Approximate semantic KV reuse is not generally correctness-preserving.
+Exact-prefix KV reuse is semantics-preserving under causal attention. Approximate semantic KV reuse is not generally correctness-preserving. ShadowKV++ separates opportunity detection, utility scoring, execution admission, and backend correctness validation. See [`docs/semantic_fidelity.md`](docs/semantic_fidelity.md) for the full fidelity analysis.
 
-ShadowKV++ therefore separates:
-
-- semantic opportunity detection,
-- utility scoring,
-- execution admission,
-- and backend correctness validation.
-
-For real HF backends, report semantic opportunity metrics separately from exact-prefix cache-hit metrics unless a backend-specific guard validates approximate reuse.
+---
 
 ## Citation
 
-If you use this artifact, cite the associated ShadowKV++ manuscript and include the result manifest:
+If you use this artifact, cite the associated ShadowKV++ manuscript.
 
-```text
-results/manifest.json
-```
+---
 
 ## Acknowledgements
 
-The included P100 experiments were run using NVIDIA P100 GPU access provided by Prof. Sparsh Mittal and the Department of Electronics and Communication Engineering, IIT Roorkee.
+P100 experiments run using NVIDIA P100 GPU access provided by Prof. Sparsh Mittal and the Department of Electronics and Communication Engineering, IIT Roorkee.

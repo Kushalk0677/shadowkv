@@ -1,0 +1,74 @@
+[
+  {
+    "model": "qwen25_15b",
+    "dataset": "samsum",
+    "sample_idx": 0,
+    "shared_ratio": 0.75,
+    "shared_tokens": 19,
+    "total_tokens_orig": 26,
+    "total_tokens_mod": 26,
+    "exact_text": " \nJerry: Thanks! :-)\n\nWhat was that dialogue about, in two sentences",
+    "ref_text": "\nJerry: Thanks! :-)\n\nWhat was that dialogue about, in two sentences",
+    "reuse_text": "\nJerry: Thanks! I'll be back tomorrow\nAmanda: Great!"
+  },
+  {
+    "model": "qwen25_15b",
+    "dataset": "samsum",
+    "sample_idx": 0,
+    "shared_ratio": 0.5,
+    "shared_tokens": 13,
+    "total_tokens_orig": 26,
+    "total_tokens_mod": 26,
+    "exact_text": " \nJerry: Thanks! :-)\n\nWhat was that dialogue about, in two sentences",
+    "ref_text": ", I'd love to! :-)\n\nWhat was that dialogue about, in two",
+    "reuse_text": ", I'd love to! :-)\n\nWhat was that dialogue about, in two"
+  },
+  {
+    "model": "qwen25_15b",
+    "dataset": "samsum",
+    "sample_idx": 0,
+    "shared_ratio": 0.25,
+    "shared_tokens": 6,
+    "total_tokens_orig": 26,
+    "total_tokens_mod": 26,
+    "exact_text": " \nJerry: Thanks! :-)\n\nWhat was that dialogue about, in two sentences",
+    "ref_text": "?I'm coming over to your house this afternoon, so maybe we can have",
+    "reuse_text": " want to come over? I: Sure, I'd love to. When can"
+  },
+  {
+    "model": "qwen25_15b",
+    "dataset": "samsum",
+    "sample_idx": 0,
+    "shared_ratio": 0.75,
+    "shared_tokens": 22,
+    "total_tokens_orig": 30,
+    "total_tokens_mod": 30,
+    "exact_text": ", I'm glad we agree on something. \nOlivia: But why do",
+    "ref_text": " too. I'm not sure if it's a good idea to vote for them",
+    "reuse_text": " too. I'm voting for the Liberals. \nOlivia: I'm voting"
+  },
+  {
+    "model": "qwen25_15b",
+    "dataset": "samsum",
+    "sample_idx": 0,
+    "shared_ratio": 0.5,
+    "shared_tokens": 15,
+    "total_tokens_orig": 30,
+    "total_tokens_mod": 30,
+    "exact_text": ", I'm glad we agree on something. \nOlivia: But why do",
+    "ref_text": ". I'm not sure if it's a good idea to vote for the Conservatives",
+    "reuse_text": ": Olivia: I'm voting for the Green Party. \nOliver: Olivia"
+  },
+  {
+    "model": "qwen25_15b",
+    "dataset": "samsum",
+    "sample_idx": 0,
+    "shared_ratio": 0.25,
+    "shared_tokens": 7,
+    "total_tokens_orig": 30,
+    "total_tokens_mod": 30,
+    "exact_text": ", I'm glad we agree on something. \nOlivia: But why do",
+    "ref_text": "?\n Olivia: I'm not sure. I've been thinking about it a lot",
+    "reuse_text": "? \n Olivia: Yes, I am voting for Great Liberals. I am also"
+  }
+]

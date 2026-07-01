@@ -1,5 +1,6 @@
 # Canonical Result Bundle
 This directory contains the two main 3-seed hardware result sets used for the ShadowKV++ draft.
+
 ## Included Results
 - Benchmark JSON files: `898`
 - Engine rows: `8532`
@@ -20,6 +21,17 @@ This directory contains the two main 3-seed hardware result sets used for the Sh
 | `shadow_kv_plus_best_latency` | 1.331x | [1.307, 1.354] | 1.455x | 0.228 | 0.500 |
 | `shadow_kv_plus_raw_observer` | 1.356x | [1.333, 1.379] | 1.514x | 0.158 | 0.404 |
 | `strict_reactive_prefix_cache` | 1.254x | [1.236, 1.273] | 1.278x | 0.000 | 0.310 |
+
+## Fidelity Experiment Results
+The `results/fidelity/` directory contains JSON outputs from the KV cache reuse fidelity experiment (5 models, 10 datasets, ~1,200 samples). See [`docs/semantic_fidelity.md`](../docs/semantic_fidelity.md) for analysis.
+
+| Model | ROUGE-L | Verdict |
+|-------|:-------:|:-------:|
+| TinyLlama | 0.966 | Safe |
+| Gemma 2B | 0.974 | Safe |
+| Phi-3 Mini | 0.931 | Acceptable |
+| GPT-2 | 0.876 | Acceptable |
+| Qwen2.5 1.5B | 0.200 | Needs guard |
 
 ## Notes
 - Raw-mode ShadowKV++ gains should be interpreted as bypass/overhead-avoidance gains, not as exact KV reuse gains.
