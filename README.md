@@ -24,6 +24,14 @@ ShadowKV++ combines three cooperating components:
 
 ### Main HF Evaluation (5 models x 10 datasets x 5 seeds)
 
+Baselines: **No cache** (no KV reuse, recompute every request),
+**Reactive** (store on first observation, reuse on exact match),
+**Greedy** (reactive + attempt all stored prefixes),
+**Strict reactive** (reactive with minimum prefix length gate),
+**Frequency spec.** (speculative precompute gated on observation frequency),
+**ShadowKV** (prior system without waste-aware admission),
+**ShadowKV++** (this work).
+
 | Engine | Mean Speedup | Waste | Hit Rate |
 |--------|:-----------:|:-----:|:--------:|
 | No cache | 1.000x | 0.000 | 0.000 |
