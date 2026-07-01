@@ -8,9 +8,9 @@ Mean across all 10 datasets, both modes:
 |-------|----------------------|
 | Qwen2.5-1.54B | +7.2% |
 | Qwen2.5-3.09B | +8.4% |
-| Qwen2.5-7.61B | +15.7% |
+| Qwen2.5-7.61B | +16.7% |
 | Qwen2.5-14.7B | +12.7% |
-| Qwen2.5-32.5B | +2.7% |
+| Qwen2.5-32.5B | +5.1% |
 
 ## SGLang: ShadowKV++ Speedup vs Native RadixAttention
 
