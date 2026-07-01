@@ -25,4 +25,4 @@ Three vLLM-based engines compared on Qwen2.5-32B-Instruct across all ten dataset
 - 32B measurements are from single runs (no replication).
 - Smaller model sizes (1.5B-14B) are scaled from 32B using SGLang model-size ratios.
 - Missing datasets are scaled from the nearest measured dataset by token length.
-- All measurements on NVIDIA RTX 6000 Ada Generation.
+- All measurements on NVIDIA RTX PRO 6000 Blackwell.

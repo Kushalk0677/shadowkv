@@ -83,7 +83,7 @@ production LLM serving systems.
 
 ## Hardware
 
-NVIDIA RTX 6000 Ada (48 GB VRAM, 960 GB/s), Intel Xeon Gold 5418Y, 128 GB RAM.
+NVIDIA RTX PRO 6000 Blackwell.
 
 ## Models
 
@@ -106,7 +106,7 @@ Two prompt modes: templated and RAG.
 ## Key Results
 
 **SGLang:** ShadowKV++ achieves 16.7% speedup over LMCache at 7B, with
-benefit increasing monotonically with model size.
+benefit increasing with model size up to 7B.
 
 **vLLM:** At 32B, APC + ShadowKV++ achieves 19.0% speedup over no-cache
 and reduces GPU energy by 25%.
@@ -188,7 +188,7 @@ Three vLLM-based engines compared on Qwen2.5-32B-Instruct across all ten dataset
 - 32B measurements are from single runs (no replication).
 - Smaller model sizes (1.5B-14B) are scaled from 32B using SGLang model-size ratios.
 - Missing datasets are scaled from the nearest measured dataset by token length.
-- All measurements on NVIDIA RTX 6000 Ada Generation.
+- All measurements on NVIDIA RTX PRO 6000 Blackwell.
 """
     (OUT / "vllm" / "README.md").write_text(vllm_readme)
     print("  Updated vllm/README.md")
@@ -304,7 +304,7 @@ Mean across 5 measured datasets, both modes (32B):
 
 This repository includes real-world runtime benchmark results in
 [`runtime_experiments/`](runtime_experiments/). ShadowKV++ was evaluated on
-production LLM serving systems (SGLang, LMCache, vLLM) on **NVIDIA RTX 6000 Ada**
+production LLM serving systems (SGLang, LMCache, vLLM) on **NVIDIA RTX PRO 6000 Blackwell**
 GPUs with **Qwen2.5 family models (1.5B-32B)** across **all ten datasets**.
 
 **Key results:**

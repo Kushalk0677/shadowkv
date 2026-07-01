@@ -51,7 +51,7 @@ See the main `README.md` for the full 5-model, 10-dataset, 3-mode,
 ## Real-World Runtime Results
 
 The runtime experiments (`runtime_experiments/`) use SGLang, LMCache,
-and vLLM on RTX 6000 Ada GPUs with Qwen2.5 models.
+and vLLM on RTX PRO 6000 Blackwell GPUs with Qwen2.5 models.
 
 ### Data format
 

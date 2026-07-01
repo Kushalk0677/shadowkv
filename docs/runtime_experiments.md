@@ -5,7 +5,7 @@ experiments in `runtime_experiments/`.
 
 ## Hardware
 
-- **GPU**: NVIDIA RTX 6000 Ada Generation (48 GB VRAM, 960 GB/s bandwidth)
+- **GPU**: NVIDIA RTX PRO 6000 Blackwell
 - **CPU**: Intel Xeon Gold 5418Y
 - **RAM**: 128 GB
 - **OS**: Linux (Ubuntu 22.04)
