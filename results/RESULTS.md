@@ -1,15 +1,47 @@
-# Canonical Result Bundle
-This directory contains the two main 3-seed hardware result sets used for the ShadowKV++ draft.
+﻿# Canonical Result Bundle
 
-## Included Results
-- Benchmark JSON files: `898`
-- Engine rows: `8532`
-- Hardware result roots: `results/final_p100`, `results/final_t4`
-- Seeds: `42`, `123`, `456`
-- Models: GPT-2, TinyLlama-1.1B-Chat, Qwen2.5-1.5B-Instruct, Gemma-2B-IT, Phi-3-mini-4k-instruct
-- Datasets: AG News, Banking77, AlpacaEval, Dolly, DailyDialog, OASST1, UltraChat, SAMSum, XSum, CNN/DailyMail
+This directory is the public result bundle for the ShadowKV / ShadowKV++ draft. It keeps the controlled aggregate results, realistic isolated-result traces, fidelity examples, and small timing smoke outputs in one place.
 
-## Headline Aggregate
+## Directory Layout
+
+```text
+results/
+  controlled_results/     # T4/P100 controlled multi-engine benchmark outputs and CSV summaries
+  realistic_results/      # Process-isolated no_cache and shadow_kv_plus JSON outputs
+  fidelity_examples/      # Per-sample KV reuse fidelity examples
+  sweep_timing/           # Small fake-backend timing smoke outputs
+  RESULTS.md              # This overview
+  architectural_robustness.md
+```
+
+## Controlled Results
+
+`controlled_results/` contains the aggregate tables used for the main paper-style comparison.
+
+Included files:
+
+```text
+controlled_results/summary_by_engine.csv
+controlled_results/summary_by_mode_engine.csv
+controlled_results/manifest.json
+controlled_results/t4/**/benchmark_*.json
+controlled_results/p100/**/benchmark_*.json
+```
+
+Current controlled bundle contents:
+
+```text
+Benchmark JSON files: 898
+Engine rows summarized: 8532
+Hardware roots: controlled_results/t4, controlled_results/p100
+Seeds: 42, 123, 456
+Prompt modes: raw, templated, semantic
+Models: GPT-2, TinyLlama-1.1B-Chat, Qwen2.5-1.5B-Instruct, Gemma-2B-IT, Phi-3-mini-4k-instruct
+Datasets: AG News, Banking77, AlpacaEval, Dolly, DailyDialog, OASST1, UltraChat, SAMSum, XSum, CNN/DailyMail
+```
+
+### Headline Controlled Aggregate
+
 | Engine | Mean Speedup | 95% CI | P95 Speedup | Waste | Hit Rate |
 |---|---:|---:|---:|---:|---:|
 | `frequency_speculative` | 1.208x | [1.191, 1.224] | 1.209x | 0.284 | 0.617 |
@@ -22,18 +54,26 @@ This directory contains the two main 3-seed hardware result sets used for the Sh
 | `shadow_kv_plus_raw_observer` | 1.356x | [1.333, 1.379] | 1.514x | 0.158 | 0.404 |
 | `strict_reactive_prefix_cache` | 1.254x | [1.236, 1.273] | 1.278x | 0.000 | 0.310 |
 
-## Fidelity Experiment Results
-The `results/fidelity/` directory contains JSON outputs from the KV cache reuse fidelity experiment (5 models, 10 datasets, ~1,200 samples). See [`docs/semantic_fidelity.md`](../docs/semantic_fidelity.md) for analysis.
+The CSV files contain the authoritative aggregate values. Prefer the CSVs over copying table values by hand.
 
-| Model | ROUGE-L | Verdict |
-|-------|:-------:|:-------:|
-| TinyLlama | 0.966 | Safe |
-| Gemma 2B | 0.974 | Safe |
-| Phi-3 Mini | 0.931 | Acceptable |
-| GPT-2 | 0.876 | Acceptable |
-| Qwen2.5 1.5B | 0.200 | Needs guard |
+## Realistic Results
 
-## Notes
-- Raw-mode ShadowKV++ gains should be interpreted as bypass/overhead-avoidance gains, not as exact KV reuse gains.
-- Approximate semantic KV substitution is not correctness-preserving by default; semantic opportunities should be interpreted with the paper's correctness boundary.
-- `summary_by_engine.csv` and `summary_by_mode_engine.csv` are generated from the JSON files in this folder.
+`realistic_results/` contains process-isolated JSON outputs for deployment-style checks. The current folder has 3000 JSON files and one sweep log. It is organized by engine first:
+
+```text
+realistic_results/no_cache/<model>/<prompt_mode>/seed_<seed>/<dataset>/benchmark_*.json
+realistic_results/shadow_kv_plus/<model>/<prompt_mode>/seed_<seed>/<dataset>/benchmark_*.json
+```
+
+Use these files to inspect isolated no-cache and ShadowKV++ behavior under a cleaner per-engine process boundary. These are not the same as the controlled aggregate CSVs.
+
+## Fidelity Examples
+
+`fidelity_examples/` contains per-sample generation outputs for KV reuse fidelity checks. See `fidelity_examples/README.md` for format and caveats.
+
+## Interpretation Notes
+
+- Raw-mode ShadowKV++ gains should be interpreted as bypass and overhead-avoidance gains, not as proof of exact KV reuse.
+- Approximate semantic KV substitution is not correctness-preserving by default. Semantic opportunities should be discussed with explicit correctness boundaries.
+- High hit rate alone is not a win. Use matched latency and energy columns where available.
+- `controlled_results/summary_by_engine.csv` and `controlled_results/summary_by_mode_engine.csv` are generated from the controlled benchmark JSON files.

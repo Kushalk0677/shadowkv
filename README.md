@@ -1,12 +1,25 @@
-# ShadowKV++: Waste-Aware, Correctness-Bounded KV Cache Reuse
+﻿# ShadowKV++: Novel Per-Request Utility Decisions for KV Cache Reuse
 
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](PENDING)
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ShadowKV++ is a per-request policy controller for KV cache reuse in LLM serving. It scores each potential reuse event with a net-utility objective U = B - C - W (benefit, cost, waste) and admits reuse only when U >= 0. Three properties distinguish it: (1) bypass is a first-class action for low-signal workloads; (2) semantic neighbourhood detection identifies candidate reuse opportunities, which are admitted only when U >= 0 and a backend execution flag is set; and (3) per-request telemetry records every policy decision for audit.
+ShadowKV++ is a per-request policy controller for KV cache reuse in LLM serving. Instead of treating reuse as a yes/no prefix-cache mechanism, it asks whether reuse helps this particular request. Each candidate is scored with a net-utility objective, `U = benefit - cost - waste`, and the controller can admit reuse, bypass it, or record a semantic opportunity without blindly executing approximate KV substitution.
 
 > **Authors:** Kushal Khemani, Evan Leri, Dr. Sparsh Mittal
+
+---
+
+## What Is Novel
+
+The central novelty is the per-request utility decision. A conventional prefix cache reuses whenever a matching prefix exists. ShadowKV++ adds a request-level admission step that estimates whether the matched reuse is actually worth executing under the current workload, model, and hardware conditions.
+
+This gives the system three useful properties:
+
+- **Explicit bypass:** low-value reuse can be skipped instead of adding overhead.
+- **Waste accounting:** speculative work is measured as waste when it is not reused.
+- **Semantic opportunity tracking:** semantic matches can be detected and scored without assuming approximate KV reuse is always correctness-preserving.
 
 ---
 
@@ -14,23 +27,19 @@ ShadowKV++ is a per-request policy controller for KV cache reuse in LLM serving.
 
 ShadowKV++ combines three cooperating components:
 
-- **TieredStateBank** - stores KV entries keyed by prefix token sequences with longest-prefix lookup via a radix trie. Per-prefix statistics track frequency, observation count, branching factor, and memory footprint. Entries are promoted to GPU-resident tier after sufficient reuse events and demoted under memory pressure.
-- **AdaptiveReuseController** - calls Plan(x) per request and returns a ReusePlan: strategy, speculate depth, reusable prefix length, expected benefit/cost/waste (ms), score, confidence, and reason. Three branches handle exact-prefix reuse, semantic-approximate reuse (when Us >= 0 and the execution flag is set), and bypass when utility is negative.
-- **SemanticKVIndex** - detects paraphrase-equivalent request families with a 128-dim hash-based token sketch without a sentence encoder on the hot path. Cosine similarity between normalised vectors approximates structural overlap.
+- **TieredStateBank** - stores KV entries keyed by prefix token sequences with longest-prefix lookup via a radix trie. Per-prefix statistics track frequency, observation count, branching factor, and memory footprint.
+- **AdaptiveReuseController** - evaluates each request and returns a reuse plan: bypass, exact reuse, semantic opportunity, or guarded semantic reuse when the backend and safety checks allow it.
+- **SemanticKVIndex** - detects paraphrase-equivalent request families with a lightweight token sketch, so semantic opportunities can be recorded without adding a sentence encoder to the hot path.
 
 ---
 
 ## Key Results
 
-### Main HF Evaluation (5 models x 10 datasets x 5 seeds)
+### Main HF Evaluation
 
-Baselines: **No cache** (no KV reuse, recompute every request),
-**Reactive** (store on first observation, reuse on exact match),
-**Greedy** (reactive + attempt all stored prefixes),
-**Strict reactive** (reactive with minimum prefix length gate),
-**Frequency spec.** (speculative precompute gated on observation frequency),
-**ShadowKV** (prior system without waste-aware admission),
-**ShadowKV++** (this work).
+The controlled HuggingFace results cover 5 models, 10 datasets, 3 prompt modes, and 3 seeds (`42`, `123`, `456`) on T4 and P100 GPUs. The aggregate CSVs live under `results/controlled_results/`.
+
+Baselines include no-cache, reactive prefix caching, greedy prefix caching, strict reactive prefix caching, frequency speculation, ShadowKV, and ShadowKV++.
 
 | Engine | Mean Speedup | Waste | Hit Rate |
 |--------|:-----------:|:-----:|:--------:|
@@ -42,98 +51,70 @@ Baselines: **No cache** (no KV reuse, recompute every request),
 | ShadowKV | 1.287x | 0.264 | 0.606 |
 | **ShadowKV++** | **1.365x** | **0.156** | **0.402** |
 
-- Waste 41% below ShadowKV (0.156 vs 0.264)
-- Significant on all 10 datasets (p < 0.001, nine datasets; p < 10^-4, one dataset)
+The headline result is not just higher hit rate. ShadowKV++ improves latency while reducing wasted speculative work relative to ShadowKV.
 
-### Runtime Evaluation (SGLang, LMCache, vLLM - Qwen2.5 1.5B-32B)
+### Runtime Evaluation
+
+Runtime-system experiments are stored in `runtime_experiments/` and cover SGLang, LMCache, and vLLM on an NVIDIA RTX PRO 6000 Blackwell system with Qwen2.5 models from 1.5B to 32B.
 
 | Metric | Value |
 |--------|-------|
 | ShadowKV++ vs LMCache at 7B | +16.7% |
 | ShadowKV++ at 32B over LMCache | +5.1% |
-| vLLM APC+ShadowKV++ vs no-cache at 32B | +19.0% |
-| GPU energy saving (vLLM at 32B) | ~25% |
+| vLLM APC + ShadowKV++ vs no-cache at 32B | +19.0% |
+| GPU energy saving, vLLM at 32B | about 25% |
 
-### KV Cache Reuse Fidelity (DynamicCache.crop(), 75% shared prefix, float16)
+### KV Cache Reuse Fidelity
 
-| Model | ROUGE-L | Verdict |
-|-------|:-------:|:-------:|
-| TinyLlama (1.1B) | **0.966** | Safe |
-| Gemma 2B | **0.974** | Safe |
-| Phi-3 Mini (3.8B) | **0.931** | Acceptable |
-| GPT-2 (124M) | **0.876** | Acceptable |
-| Qwen2.5 1.5B | **0.200** | Needs precision guard |
+Fidelity examples live in `results/fidelity_examples/`. These files are diagnostic examples, not a claim that approximate semantic KV substitution is universally safe.
 
-### Controller Overhead (Plan() latency, 1,000 synthetic requests)
-
-| Component | Mean | Frequency |
-|-----------|:---:|:---------:|
-| Policy planning | 2.30 ms | 100% |
-| Semantic index query | 7.18 ms | 17% |
-| Amortised overhead | 1.2 ms | - |
-| **Fraction of GPU inference time** | **0.5-2.3%** | - |
+| Model | ROUGE-L | Interpretation |
+|-------|:-------:|----------------|
+| TinyLlama 1.1B | 0.966 | robust in this check |
+| Gemma 2B | 0.974 | robust in this check |
+| Phi-3 Mini | 0.931 | acceptable but should be checked |
+| GPT-2 | 0.876 | acceptable but should be checked |
+| Qwen2.5 1.5B | 0.200 | needs precision/quality guard |
 
 ---
 
 ## Repository Layout
 
-```
+```text
 src/proactive_kv_cache/        Core engines, cache bank, controller, models
-├── engines.py                   BaseEngine, NoCacheEngine, ShadowKVPlusEngine
-├── cache.py                     TieredStateBank with radix trie
-├── controller.py                AdaptiveReuseController, utility scoring
-├── policy.py                    CostAwareSlackPolicy
-├── semantic.py                  SemanticKVIndex, token sketching
-├── models.py                    Backend abstraction (FakeBackend, HFBackend)
-├── datasets.py                  Dataset loading and prompt templates
-├── utils.py                     Calibration, estimates, KV byte counting
-├── metrics.py                   Engine metrics, aggregation
-├── policy_learning.py           Offline grid-search learner
-├── workload.py                  Workload generation
-├── backend_adapters.py          Backend adapter layer
-├── config_loader.py             Runtime configuration
-├── base_policy.py               Policy controller base class
-├── rl_policy.py                 RL-based policy controller
-├── utility_policy.py            Utility-based policy controller
-├── utility_admission.py         Online utility estimator
-├── telemetry.py                 JSON decision logger
-├── energy.py                    GPU energy metering
-├── config_watcher.py            Config file watcher
-├── prefix_gate.py               Raw-mode gate logic
-├── __init__.py
-├── backend/
-│   ├── fake_backend.py          Fake backend for simulation
-│   └── __init__.py
+  engines.py                   BaseEngine, NoCacheEngine, ShadowKVPlusEngine
+  cache.py                     TieredStateBank with radix trie
+  controller.py                AdaptiveReuseController, utility scoring
+  policy.py                    CostAwareSlackPolicy
+  semantic.py                  SemanticKVIndex, token sketching
+  models.py                    Backend abstraction (FakeBackend, HFBackend)
+  datasets.py                  Dataset loading and prompt templates
+  metrics.py                   Engine metrics and aggregation
+  policy_learning.py           Offline grid-search learner
+  backend_adapters.py          Experimental runtime adapter layer
+  telemetry.py                 JSON decision logger
+  energy.py                    GPU energy metering
+
 experiments/
-├── run_benchmark.py             Main benchmark entry point
-├── run_fidelity_equiv.py        KV cache reuse fidelity pipeline
-├── eval_comprehensive.py        ROUGE-L and exact-match evaluator
-├── profile_plan.py              Controller Plan() latency profiler
-├── analyze_shadowkv_results.py  Result parser and policy-summary generator
-├── archive/                     Superseded experiment scripts
-├── ...
+  run_benchmark.py             Main benchmark entry point
+  run_fidelity_equiv.py        KV cache reuse fidelity pipeline
+  eval_comprehensive.py        ROUGE-L and exact-match evaluator
+  profile_plan.py              Controller Plan() latency profiler
+  analyze_shadowkv_results.py  Result parser and policy-summary generator
+  archive/                     Superseded experiment scripts and notebooks
+
 results/
-├── final_p100/                  Canonical P100 benchmark JSONs
-├── final_t4/                    Canonical T4 benchmark JSONs
-├── fidelity/
-│   ├── all_results.json         1,221 samples (5 models x 10 datasets)
-│   ├── control/                 Ratio=0.0 control (13 samples, 100% match)
-│   └── qwen_ratios/             Multi-ratio sweep (75/50/25%)
-├── RESULTS.md                   Headline aggregate table
-└── summary_by_engine.csv
-docs/
-├── design_overview.md           System architecture and design rationale
-├── engine_failures.md           Failure analysis (breakeven guard, coupling penalty)
-├── semantic_fidelity.md         Full fidelity report
-├── fidelity_deep_analysis.md    Root cause analysis of Qwen float16 failure
-├── experimental_setup.md        Fidelity methodology description
-├── results_table.md             Complete results with precision comparison
-├── reports/                     Archived design reports
-├── ...
-runtime_experiments/           SGLang, LMCache, vLLM results
-tests/                           Unit and regression tests
-pyproject.toml
-requirements.txt
+  controlled_results/          T4/P100 controlled benchmark JSONs and CSV summaries
+  realistic_results/           Process-isolated no-cache and ShadowKV++ JSON outputs
+  fidelity_examples/           Per-sample KV reuse fidelity examples
+  sweep_timing/                Small timing/smoke outputs
+  RESULTS.md                   Public result-bundle guide
+  architectural_robustness.md  Controlled versus realistic validation notes
+
+runtime_experiments/           SGLang, LMCache, and vLLM result tables
+literature_accurate_baselines/ Runtime-baseline adapters and source notes
+docs/                          Design, reproduction, and analysis documents
+tests/                         Unit and regression tests
 ```
 
 ---
@@ -157,7 +138,7 @@ pip install -e .
 pip install pytest
 ```
 
-### 3. Verify with a smoke test (FakeBackend, no GPU required)
+### 3. Verify with a smoke test
 
 ```bash
 python experiments/run_benchmark.py \
@@ -170,7 +151,7 @@ python experiments/run_benchmark.py \
   --output_dir results/smoke_fake
 ```
 
-Expected output: benchmark JSON and summary in `results/smoke_fake/`.
+Expected output: a benchmark JSON and summary under `results/smoke_fake/`.
 
 ### 4. Run the test suite
 
@@ -178,7 +159,7 @@ Expected output: benchmark JSON and summary in `results/smoke_fake/`.
 python -m pytest -q
 ```
 
-Expected: `49 passed, 1 skipped`. The skipped test is an optional slow HF KV-correctness check.
+The exact count can change as tests are added. The optional slow HF KV-correctness test may be skipped when the required environment is not available.
 
 ---
 
@@ -191,7 +172,7 @@ from proactive_kv_cache.models import FakeBackend
 backend = FakeBackend()
 engine = ShadowKVPlusEngine(backend=backend, max_memory_mb=256)
 
-tokens = tuple(range(50, 100))  # synthetic token sequence
+tokens = tuple(range(50, 100))
 metadata = {'prompt_mode': 'raw', 'arrival_time': 0.0}
 
 result = engine.serve_tokens(request_id=0, tokens=tokens, metadata=metadata)
@@ -206,13 +187,15 @@ print(f"Reused {result.matched_prefix_length} tokens, "
 
 | Experiment | Description |
 |---|---|
-| run_benchmark.py | Full HF benchmark: 5 models, 10 datasets, 3 modes, 5 seeds |
-| run_fidelity_equiv.py | KV reuse fidelity via DynamicCache.crop() |
-| profile_plan.py | Controller Plan() latency profiling |
-| eval_comprehensive.py | ROUGE-L and exact-match evaluation |
-| analyze_shadowkv_results.py | Result parser and policy-summary generator |
+| `run_benchmark.py` | HF/fake benchmark runner across models, datasets, modes, seeds, and engines |
+| `run_fidelity_equiv.py` | KV reuse fidelity checks via `DynamicCache.crop()` |
+| `profile_plan.py` | Controller `Plan()` latency profiling |
+| `eval_comprehensive.py` | ROUGE-L and exact-match evaluation |
+| `analyze_shadowkv_results.py` | Result parser and policy-summary generator |
+| `run_blackwell_semantic_n128.py` | Isolated RTX PRO 6000 Blackwell semantic n=128 sweep |
+| `run_p100_isolated_sweep.py` | Conservative isolated P100 rerun driver |
 
-### Reproduce a small matrix
+### Reproduce a Small Matrix
 
 ```bash
 MODEL="Qwen/Qwen2.5-1.5B-Instruct"
@@ -231,7 +214,7 @@ for SEED in 42 123 456; do
 done
 ```
 
-### Reproduce fidelity results (CPU)
+### Reproduce Fidelity Examples
 
 ```bash
 python experiments/run_fidelity_equiv.py --device cpu \
@@ -240,28 +223,19 @@ python experiments/run_fidelity_equiv.py --device cpu \
   --n_samples 8 --max_gen_tokens 64
 ```
 
-### GPU fidelity (Colab T4)
-
-Upload experiments/fidelity_equiv_colab.ipynb to Google Colab and run.
-
-### Controller overhead profiling
-
-```bash
-python experiments/profile_plan.py
-```
+For GPU checks, use `experiments/fidelity_equiv_colab.ipynb` from the archive/experiment folder if present in your working copy.
 
 ---
 
 ## Included Result Artifacts
 
-| Device / Experiment | Path |
+| Artifact | Path |
 |---|---|
-| T4 benchmark JSONs (3 seeds) | results/final_t4/ |
-| P100 benchmark JSONs (3 seeds) | results/final_p100/ |
-| Fidelity experiment (5 models, ~1,200 samples) | results/fidelity/ |
-| Fidelity control (ratio=0.0) | results/fidelity/control/ |
-| Qwen multi-ratio sweep | results/fidelity/qwen_ratios/ |
-| Runtime experiments (SGLang, LMCache, vLLM) | runtime_experiments/ |
+| Controlled T4/P100 benchmark JSONs and summaries | `results/controlled_results/` |
+| Aggregate controlled CSVs | `results/controlled_results/summary_by_engine.csv`, `results/controlled_results/summary_by_mode_engine.csv` |
+| Process-isolated no-cache and ShadowKV++ outputs | `results/realistic_results/` |
+| Fidelity example JSONs | `results/fidelity_examples/` |
+| Runtime-system experiments | `runtime_experiments/` |
 
 ---
 
@@ -269,11 +243,11 @@ python experiments/profile_plan.py
 
 To keep the repository lightweight:
 
-- **Paper source / LaTeX** - the manuscript is maintained separately
-- **Model weights** - all models are downloaded from HuggingFace at runtime
-- **Datasets** - all datasets are downloaded from HuggingFace at runtime
-- **Transient local outputs** outside the curated results/ and runtime_experiments/ snapshots
-- **GPU benchmark baselines** - full reproduction requires a CUDA-capable GPU (T4, P100, or better)
+- **Paper source / LaTeX** - the manuscript is maintained separately.
+- **Model weights** - all models are downloaded from Hugging Face at runtime.
+- **Datasets** - all datasets are downloaded from Hugging Face at runtime.
+- **Transient local outputs** outside the curated `results/` and `runtime_experiments/` snapshots.
+- **Full raw runtime deliverables** used to build the compact runtime CSVs.
 
 ---
 
@@ -283,20 +257,25 @@ To keep the repository lightweight:
 |-------|----------|
 | System design and rationale | [docs/design_overview.md](docs/design_overview.md) |
 | Engine failure analysis | [docs/engine_failures.md](docs/engine_failures.md) |
+| Architectural robustness | [results/architectural_robustness.md](results/architectural_robustness.md) |
 | Fidelity experiment methodology | [docs/experimental_setup.md](docs/experimental_setup.md) |
 | Fidelity results and coupled utility | [docs/results_table.md](docs/results_table.md) |
 | Qwen float16 root cause | [docs/fidelity_deep_analysis.md](docs/fidelity_deep_analysis.md) |
-| Comprehensive fidelity report | [docs/semantic_fidelity.md](docs/semantic_fidelity.md) |
+| Semantic correctness boundary | [docs/semantic_fidelity.md](docs/semantic_fidelity.md) |
+| Runtime experiments | [runtime_experiments/README.md](runtime_experiments/README.md) |
+| Blackwell reproduction | [docs/reproducing_blackwell.md](docs/reproducing_blackwell.md) |
+| P100 reproduction | [docs/reproducing_p100.md](docs/reproducing_p100.md) |
+| External artifacts | [docs/artifact_manifest.md](docs/artifact_manifest.md) |
 
 ---
 
 ## Citation
 
 ```bibtex
-@misc{khemani2025shadowkv,
-  title={ShadowKV++: A Policy Controller for Waste-Aware, Admission-Controlled KV Cache Reuse in LLM Serving},
+@misc{khemani2026shadowkv,
+  title={ShadowKV++: Novel Per-Request Utility Decisions for Waste-Aware KV Cache Reuse},
   author={Kushal Khemani and Evan Leri and Sparsh Mittal},
-  year={2025},
+  year={2026},
   eprint={XXXX.XXXXX},
   archivePrefix={arXiv},
   primaryClass={cs.CL},

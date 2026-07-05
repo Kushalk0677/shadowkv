@@ -1,0 +1,120 @@
+{
+  "created_at_utc": "2026-07-05T08:58:19Z",
+  "git_commit": null,
+  "config_hash_sha256": "a5ef1d71f1d826946f90a3ac32abd4e67219053e334f22e47c3275435e908981",
+  "config_version": "shadowkv-policy-v1",
+  "config_profile_id": "default-unprofiled",
+  "seed": 999,
+  "model": "gpt2",
+  "backend": "hf",
+  "device": "cuda",
+  "dtype": "float16",
+  "platform": "Linux-6.8.0-59-generic-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "gpu": {
+    "cuda_available": true,
+    "gpu_name": "Tesla P100-PCIE-12GB",
+    "gpu_capability": "6.0",
+    "nvidia_smi": "Tesla P100-PCIE-12GB, 570.133.20, 12288 MiB"
+  },
+  "env": {
+    "CUDA_VISIBLE_DEVICES": "0"
+  },
+  "config_snapshot": {
+    "version": "shadowkv-policy-v1",
+    "profile_id": "default-unprofiled",
+    "hardware": {
+      "beta_prefill_ms_per_token": 0.6,
+      "reuse_fixed_overhead_ms": 2.0,
+      "kv_mb_per_token": 0.375,
+      "memory_bandwidth_gbps": 320.0,
+      "pcie_bandwidth_gbps": 15.0,
+      "min_prefix_len": 8,
+      "max_gpu_memory_mb": 256,
+      "max_cpu_memory_mb": 16384,
+      "profiled_model": null,
+      "profiled_device": null,
+      "profiled_at_utc": null
+    },
+    "policy": {
+      "utility": {
+        "util_min_ms": 0.0,
+        "risk_aversion": 0.15,
+        "suffix_cost_ms_per_token": 0.02,
+        "exact_min_confidence": 0.5,
+        "exact_max_confidence": 0.98,
+        "exact_confidence_base": 0.45,
+        "exact_confidence_reuse_weight": 0.35,
+        "exact_confidence_template_weight": 0.2,
+        "exact_layer_base": 0.2,
+        "exact_layer_confidence_weight": 0.3,
+        "semantic_threshold": 0.58,
+        "semantic_prompt_reuse_fraction": 0.7,
+        "semantic_default_reuse_fraction": 0.55,
+        "semantic_prompt_benefit_discount": 0.72,
+        "semantic_default_benefit_discount": 0.55,
+        "semantic_prompt_suffix_cost_ms_per_token": 0.04,
+        "semantic_default_suffix_cost_ms_per_token": 0.08,
+        "semantic_uncertainty_floor": 0.02,
+        "semantic_prompt_uncertainty_weight": 0.35,
+        "semantic_default_uncertainty_weight": 1.0,
+        "semantic_prompt_waste_floor": 0.03,
+        "semantic_default_waste_floor": 0.05,
+        "semantic_prompt_confidence_cap": 0.94,
+        "semantic_default_confidence_cap": 0.9,
+        "semantic_prompt_confidence_base": 0.7,
+        "semantic_default_confidence_base": 0.55,
+        "semantic_confidence_template_weight": 0.2,
+        "semantic_confidence_length_weight": 0.1,
+        "semantic_prompt_layer_weight": 0.55,
+        "semantic_default_layer_weight": 0.45,
+        "semantic_min_layer_ratio": 0.1
+      },
+      "health": {
+        "base": 0.65,
+        "hit_rate_weight": 0.35,
+        "waste_ratio_weight": 0.45,
+        "min": 0.05,
+        "max": 1.0,
+        "ewma_alpha": 0.2
+      },
+      "signals": {
+        "length_normalizer_tokens": 128.0,
+        "entropy_normalizer_bits": 8.0,
+        "entropy_penalty_weight": 0.35,
+        "templated_signal": 0.85
+      },
+      "raw_gate": {
+        "min_requests": 12,
+        "min_observations": 8,
+        "min_frequency": 0.35,
+        "min_prefix_len": 48,
+        "util_min_ms": 8.0
+      },
+      "speculation": {
+        "default_min_observations": 3,
+        "min_utility_score": 0.0
+      }
+    },
+    "semantic": {
+      "sandbox": {
+        "enabled": true,
+        "max_divergence": 0.08,
+        "top_k": 32,
+        "inflate_waste_weight": 1.0
+      },
+      "index": {
+        "dims": 128,
+        "max_entries": 1024,
+        "min_similarity": 0.2,
+        "equivalence_key_boost": 0.92
+      }
+    },
+    "telemetry": {
+      "enabled": false,
+      "include_request_text": false,
+      "max_request_text_chars": 240,
+      "decision_log_name": "policy_decisions.jsonl"
+    }
+  }
+}

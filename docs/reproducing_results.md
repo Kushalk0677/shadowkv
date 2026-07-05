@@ -1,16 +1,14 @@
 # Reproducing Results
 
-This document describes how to reproduce the canonical HuggingFace and
-real-world runtime experiment results.
+This document describes how to reproduce the repository's HuggingFace benchmark checks and how to read the runtime experiment tables.
 
 ## Canonical HF Results
 
-The paper's main results use the HuggingFace backend on T4 and P100 GPUs.
+The main controlled results use the HuggingFace backend on T4 and P100 GPUs. The public result bundle is stored under `results/controlled_results/`.
 
 ### Setup
 
 ```bash
-cd repo  # or the repository root
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip setuptools wheel
@@ -18,16 +16,15 @@ pip install -e .
 pip install pytest
 ```
 
-### Run the test suite
+### Run the Test Suite
 
 ```bash
 python -m pytest -q
 ```
 
-Expected: 49 passed, 1 skipped (the skipped test is an optional HF
-KV-correctness check).
+The exact count can change as tests are added. A slow HF KV-correctness test may be skipped when the required model/GPU environment is not available.
 
-### Run a small reproduction
+### Run a Small Reproduction
 
 ```bash
 python experiments/run_benchmark.py \
@@ -43,41 +40,56 @@ python experiments/run_benchmark.py \
   --output_dir results/hf_cpu_agnews_templated
 ```
 
-### Full paper reproduction
+### Full Paper-Style Sweep
 
-See the main `README.md` for the full 5-model, 10-dataset, 3-mode,
-3-seed sweep script. Requires GPU access.
+The public aggregate results summarize 5 models, 10 datasets, 3 prompt modes, and 3 seeds (`42`, `123`, `456`) for T4 and P100 controlled runs. See the main `README.md` for a smaller example loop. A full sweep requires CUDA GPU access and enough time to run all model/dataset/mode combinations.
 
-## Real-World Runtime Results
+## Result Layout
 
-The runtime experiments (`runtime_experiments/`) use SGLang, LMCache,
-and vLLM on RTX PRO 6000 Blackwell GPUs with Qwen2.5 models.
+```text
+results/
+  controlled_results/     # T4/P100 controlled JSONs and aggregate CSVs
+  realistic_results/      # Process-isolated no_cache and shadow_kv_plus JSONs
+  fidelity_examples/      # Per-sample fidelity examples
+  sweep_timing/           # Small timing/smoke outputs
+```
 
-### Data format
+Primary aggregate files:
 
-Each `results.csv` file contains:
+```text
+results/controlled_results/summary_by_engine.csv
+results/controlled_results/summary_by_mode_engine.csv
+results/controlled_results/manifest.json
+```
+
+## Runtime Results
+
+The runtime experiments in `runtime_experiments/` use SGLang, LMCache, and vLLM on an RTX PRO 6000 Blackwell GPU with Qwen2.5-family models.
+
+Each runtime CSV table contains columns such as:
 
 | Column | Description |
 |--------|-------------|
-| `model_slug` | Model identifier (e.g. `qwen25_7b`) |
+| `model_slug` | Model identifier |
 | `model_params_B` | Parameter count in billions |
 | `dataset` | Dataset name |
-| `mode` | Prompt mode (`templated` or `rag`) |
+| `mode` | Prompt mode |
 | `engine` | Engine name |
 | `mean_latency_ms` | Mean request latency in ms |
-| `latency_ci_95_lower` | 95% CI lower bound |
-| `latency_ci_95_upper` | 95% CI upper bound |
+| `latency_ci_95_lower` | 95% CI lower bound, when available |
+| `latency_ci_95_upper` | 95% CI upper bound, when available |
 | `throughput_rps` | Throughput in requests/sec |
 | `cached_tokens_mean` | Mean cached tokens per request |
 | `gpu_energy_j` | Total GPU energy in Joules |
-| `speedup_vs_lmcache_pct` | Speedup vs LMCache baseline (%) |
+| `speedup_vs_lmcache_pct` | Speedup vs LMCache baseline, where applicable |
 
-### Regenerate aggregate tables
+The compact CSVs in this public repo are the curated tables. Full raw runtime deliverables are not included here; regenerate them only if you have the external runtime systems and original measurement environment.
+
+### Regenerate Aggregate Tables
 
 ```bash
 cd runtime_experiments
 python build_complete_tables.py
 ```
 
-This reads raw data from the `v10/working/_extracted/` deliverables and
-produces the clean CSV files in `sglang/`, `vllm/`, and `lmcache/`.
+This command is intended for a working copy that also has the raw runtime deliverables available. In the public repo, treat the checked-in CSVs as the compact release artifacts.

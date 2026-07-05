@@ -26,8 +26,20 @@ tmp*/
 Thumbs.db
 .vscode/
 .idea/
+.qodo/
 
 # Keep canonical result JSONs, but avoid accidental large local dumps.
 results/**/policy_trace.jsonl
 results/**/decision_log.jsonl
-"experiments/fidelity_equiv_colab.ipynb"  
+experiments/fidelity_equiv_colab.ipynb
+
+# Local transfer packages and raw artifact archives
+*.zip
+*.tgz
+*.tar.gz
+.stratum/
+v10/
+p100_transfer/
+incoming_p100*/
+results_blackwell_*/
+results_p100_*/

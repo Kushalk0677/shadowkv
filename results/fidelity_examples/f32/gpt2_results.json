@@ -1,0 +1,342 @@
+[
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 21,
+    "total_tokens_orig": 28,
+    "exact_text": "\nJerry: I'll bring you tomorrow :-)\nAmanda: I'll bring you tomorrow :-)\nAmanda: I'll bring you tomorrow :-)\nAmanda: I'll bring you tomorrow :-)\nAmanda: I'll bring you tomorrow :-)\nAmanda: I'll bring you tomorrow :-)\nAmanda: I",
+    "ref_text": "'m going to the party\nAmanda: I'm going to the party\nAmanda: I'm going to the party\nAmanda: I'm going to the party\nAmanda: I'm going to the party\nAmanda: I'm going to the party\nAmanda: I'm going to the",
+    "reuse_text": "'m going to the party tomorrow?\nJerry: I'm going to the party tomorrow.\nAmanda: I'm going to the party tomorrow.\nAmanda: I'm going to the party tomorrow.\nAmanda: I'm going to the party tomorrow.\nAmanda: I'm going to the party"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 26,
+    "total_tokens_orig": 35,
+    "exact_text": "!\nOliver: I'm voting for you!\nOliver: I'm voting for you!\nOliver: I'm voting for you!\nOliver: I'm voting for you!\nOliver: I'm voting for you!\nOliver: I'm voting for you!\nOliver",
+    "ref_text": " I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOl",
+    "reuse_text": " I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOliver: I'm voting for the Liberals.\nOl"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 104,
+    "total_tokens_orig": 139,
+    "exact_text": "\nKim: I'm not sure if you're going to do it but I'm going to do it\nTim: I'm going to do it\nKim: I'm going to do it\nKim: I'm going to do it\nKim: I'm going to do it\nKim: I'm going to",
+    "ref_text": " my heart\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim",
+    "reuse_text": " my heart\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim: I'm going to do a lot of stuff\nKim"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 33,
+    "total_tokens_orig": 45,
+    "exact_text": "..\nRachel: I'm not in the mood for that..\nRachel: I'm not in the mood for that..\nRachel: I'm not in the mood for that..\nRachel: I'm not in the mood for that..\nRachel: I'm not in the mood for that..\nRachel:",
+    "ref_text": "**\nEdward: I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry,",
+    "reuse_text": "**\nEdward: I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry,"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 114,
+    "total_tokens_orig": 152,
+    "exact_text": "aresay i will never be able to live with you again\nNaomi: i am so sorry for that\nNaomi: i am so sorry for that\nNaomi: i am so sorry for that\nNaomi: i am so sorry for that\nNaomi: i am so sorry for that\nNa",
+    "ref_text": "\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\n",
+    "reuse_text": "\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\nNaomi: i love you\n"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 84,
+    "total_tokens_orig": 112,
+    "exact_text": "\nDon: I'm sorry, but I'm not sure if I'm going to be able to get back to you.\nWyatt: I'm sorry, but I'm not sure if I'm going to be able to get back to you.\nWyatt: I'm sorry, but I'm",
+    "ref_text": " of the man who was the first to get married.\nWyatt: I'm sorry, but I'm not sure if I'm going to be able to get married.\nWyatt: I'm sorry, but I'm not sure if I'm going to be able to get married.\nWy",
+    "reuse_text": " of the man who was the first to get married.\nWyatt: I'm sorry, but I'm not sure if I'm going to be able to get married.\nWyatt: I'm sorry, but I'm not sure if I'm going to be able to get married.\nWy"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 103,
+    "total_tokens_orig": 138,
+    "exact_text": "iggle and say hi to me?\nJohn: I'm sorry, I'm not sure what to say.\nCassandra: I'm sorry, I'm not sure what to say.\nJohn: I'm sorry, I'm not sure what to say.\nCassandra: I'm sorry, I'm not",
+    "ref_text": "\nJohn: I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I",
+    "reuse_text": "\nJohn: I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I'm sorry, I"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 102,
+    "total_tokens_orig": 137,
+    "exact_text": "ag?\nSarah: I don't know. I don't know if it's a joke or not.\nJames: I don't know. I don't know if it's a joke or not.\nJames: I don't know. I don't know if it's a joke or not.\nJames",
+    "ref_text": " that what you're doing?\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I",
+    "reuse_text": " that what you're doing?\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I'm not doing it.\nJames: I"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 57,
+    "total_tokens_orig": 77,
+    "exact_text": "\nMadison: I'm sorry, but I'm not sure if I'm going to be able to do this anymore.\nNoah: I'm sorry, but I'm not sure if I'm going to be able to do this anymore.\nMadison: I'm sorry, but I'm not sure if I'm",
+    "ref_text": ".\nMadison: I'm sorry, but I'm not sure if I can get you to stop.\nNoah: I'm sorry, but I'm not sure if I can get you to stop.\nMadison: I'm sorry, but I'm not sure if I can get you to stop.\nMadison",
+    "reuse_text": ".\nMadison: I'm sorry, but I'm not sure if I can get you to stop.\nNoah: I'm sorry, but I'm not sure if I can get you to stop.\nMadison: I'm sorry, but I'm not sure if I can get you to stop.\nMadison"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "samsum",
+    "shared_ratio": 0.75,
+    "shared_tokens": 118,
+    "total_tokens_orig": 158,
+    "exact_text": "uz I'm not sure if you're going to be able to get to know eachother.\nAgnes: I'm not sure.\nMatt: I'm not sure.\nMatt: I'm not sure.\nMatt: I'm not sure.\nMatt: I'm not sure.\nMatt: I",
+    "ref_text": " name is:\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a",
+    "reuse_text": " name is:\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a chef.\nAgnes: I am a"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "alpaca_eval",
+    "shared_ratio": 0.75,
+    "shared_tokens": 25,
+    "total_tokens_orig": 34,
+    "exact_text": "\n\nI'm not sure how you can play it, but I'm sure you can play it.\n\nI'm not sure how you can play it, but I'm sure you can play it.\n\nI'm not sure how you can play it, but I'm sure you can play it.\n",
+    "ref_text": "\n\nI'm a big fan of the game. I've played it for years and I've never seen it as a game. I've never seen it as a game as a person. I've never seen it as a person as a person. I've never seen it as a person as a person. I",
+    "reuse_text": "\n\nI'm a big fan of the game. I've played it for years and I've never seen it as a game. I've never seen it as a game as a person. I've never seen it as a person as a person. I've never seen it as a person as a person. I"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "alpaca_eval",
+    "shared_ratio": 0.75,
+    "shared_tokens": 21,
+    "total_tokens_orig": 28,
+    "exact_text": "\n\nI'm trying to solve a crossword puzzle, but I've never done one of these before. Can you help me out?\n\nI'm trying to solve a crossword puzzle, but I've never done one of these before. Can you help me out?\n\nI'm trying to solve a",
+    "ref_text": " can't do it.\n\nI'm trying to solve a crossword puzzle, but I've never done one of these before help? out Can me. you can't do it. I'm trying to solve a crossword puzzle, but I've never done one of these before help? out Can I. you",
+    "reuse_text": " can't do it.\n\nI'm trying to solve a crossword puzzle, but I've never done one of these before help? out Can me. you can't do it. I'm trying to solve a crossword puzzle, but I've never done one of these before help? out Can I. you"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "alpaca_eval",
+    "shared_ratio": 0.75,
+    "shared_tokens": 37,
+    "total_tokens_orig": 50,
+    "exact_text": "\n\nI am a very good cook. I have been cooking for a long time. I have been cooking for a long time. I have been cooking for a long time. I have been cooking for a long time. I have been cooking for a long time. I have been cooking for a long time. I",
+    "ref_text": "\n\nI am also interested in learning about the history of the country. I am interested in learning about the history of the country. I am interested in learning about the history of the country. I am interested in learning about the history of the country. I am interested in learning about the history of the country. I",
+    "reuse_text": "\n\nI am also interested in learning about the history of the country. I am interested in learning about the history of the country. I am interested in learning about the history of the country. I am interested in learning about the history of the country. I am interested in learning about the history of the country. I"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "alpaca_eval",
+    "shared_ratio": 0.75,
+    "shared_tokens": 15,
+    "total_tokens_orig": 20,
+    "exact_text": ".\n\nI have a lot of it. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of",
+    "ref_text": ".\n\nI have a lot of it. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of",
+    "reuse_text": ".\n\nI have a lot of it. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of acne. I have a lot of"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "banking77",
+    "shared_ratio": 0.75,
+    "shared_tokens": 12,
+    "total_tokens_orig": 17,
+    "exact_text": "\n\nIf you have lost your card, you will need to contact your local card office.\n\nIf you have lost your card, you will need to contact your local card office. If you have lost your card, you will need to contact your local card office. If you have lost your card, you will",
+    "ref_text": "?\n\nIf you lose your card, you will be able to return it to your account.\n\nIf you lose your card, you will be able to return it to your account. If you lose your card, you will be able to return it to your account.\n\nIf you lose your card,",
+    "reuse_text": "?\n\nIf you lose your card, you will be able to return it to your account.\n\nIf you lose your card, you will be able to return it to your account. If you lose your card, you will be able to return it to your account.\n\nIf you lose your card,"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 23,
+    "total_tokens_orig": 31,
+    "exact_text": "                                                                ",
+    "ref_text": "                                                                ",
+    "reuse_text": "                                                                "
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 33,
+    "total_tokens_orig": 45,
+    "exact_text": "  I am not sure if you are going to be able to do that but I am sure you will be able to do it.   I am sure you will be able to do it.   I am sure you will be able to do it.   I am sure you will be able to do",
+    "ref_text": "\u00a0you be able to do it ?                                                        ",
+    "reuse_text": "\u00a0you be able to do it ?                                                        "
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 53,
+    "total_tokens_orig": 71,
+    "exact_text": "  I was so tired that I didn't even have a drink.   I was so tired that I didn't even have a drink.   I was so tired that I didn't even have a drink.   I was so tired that I didn't even have a drink.   I was so",
+    "ref_text": "   I think it is time to go for a few beers after dinner ?   I think it is time to go for a few beers after dinner ?   I think it is time to go for a few beers after dinner ?   I think it is time to go for a few beers after dinner ?",
+    "reuse_text": "   I think it is time to go for a few beers after dinner ?   I think it is time to go for a few beers after dinner ?   I think it is time to go for a few beers after dinner ?   I think it is time to go for a few beers after dinner ?"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 70,
+    "total_tokens_orig": 94,
+    "exact_text": "  I am going to go to the gym and do some work .   I am going to go to the gym and do some work .   I am going to go to the gym and do some work .   I am going to go to the gym and do some work .   I am going",
+    "ref_text": " ?   I don't think so.   I think it will help us to relax .   I think it will help us to feel good .   I think it will help us to feel good .   I think it will help us to feel good .   I think it will help us",
+    "reuse_text": " ?   I don't think so.   I think it will help us to relax .   I think it will help us to feel good .   I think it will help us to feel good .   I think it will help us to feel good .   I think it will help us"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 87,
+    "total_tokens_orig": 117,
+    "exact_text": "  I think it is a good idea to go to the gym and play with some of our friends .   I think it is a good idea to go to the gym and play with some of our friends .   I think it is a good idea to go to the gym and play with some of our friends",
+    "ref_text": " can                                                               ",
+    "reuse_text": " can                                                               "
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 99,
+    "total_tokens_orig": 133,
+    "exact_text": " he other day .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I",
+    "ref_text": " friends over .   I think we should go to the gym .   I think we should go to the gym .   I think we should go to the gym .   I think we should go to the gym .   I think we should go to the gym .   I think we should",
+    "reuse_text": " friends over .   I think we should go to the gym .   I think we should go to the gym .   I think we should go to the gym .   I think we should go to the gym .   I think we should go to the gym .   I think we should"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 99,
+    "total_tokens_orig": 133,
+    "exact_text": " he other day .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I",
+    "ref_text": " are .   I think it is a good idea to have a good workout .   I think it is a good idea to have a good workout .   I think it is a good idea to have a good workout .   I think it is a good idea to have a good workout .  ",
+    "reuse_text": " are .   I think it is a good idea to have a good workout .   I think it is a good idea to have a good workout .   I think it is a good idea to have a good workout .   I think it is a good idea to have a good workout .  "
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 99,
+    "total_tokens_orig": 133,
+    "exact_text": " he other day .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I",
+    "ref_text": "                                                                ",
+    "reuse_text": "                                                                "
+  },
+  {
+    "model": "gpt2",
+    "dataset": "daily_dialog",
+    "shared_ratio": 0.75,
+    "shared_tokens": 99,
+    "total_tokens_orig": 133,
+    "exact_text": " he other day .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I think it is a good idea to go there and meet some of our friends .   I",
+    "ref_text": " we can get some good food and drink .   I think we can do it .   I think we can do it .   I think we can do it .   I think we can do it .   I think we can do it .   I think we can do it . ",
+    "reuse_text": " we can get some good food and drink .   I think we can do it .   I think we can do it .   I think we can do it .   I think we can do it .   I think we can do it .   I think we can do it . "
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 27,
+    "total_tokens_orig": 37,
+    "exact_text": "\n\nThe stock market is on the verge of a record-breaking rally, with the Dow Jones Industrial Average up more than 1,000 points on Wednesday, the S&P 500 up more than 1,000 points and the Nasdaq Composite up more than 1,000 points.\n\nThe Dow Jones Industrial Average",
+    "ref_text": ", are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green,",
+    "reuse_text": ", are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green, are-cyn-green,"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 41,
+    "total_tokens_orig": 55,
+    "exact_text": "\n\nThe investment firm, which has a reputation for making well-timed and occasionally\\controversial plays in the defense industry, has quietly placed\\its bets on another part of the market.\n\nThe investment firm, which has a reputation for making well-timed and occasionally\\controversial plays in the",
+    "ref_text": "\n\nThe firm, which has a reputation for making well-timed and occasionally\\controversial plays in the defense industry, placed on part has the betsits\\ of market another quietly.\n\nThe firm, which has a reputation for making well-timed and occasionally\\controversial plays in the defense industry",
+    "reuse_text": "\n\nThe firm, which has a reputation for making well-timed and occasionally\\controversial plays in the defense industry, placed on part has the betsits\\ of market another quietly.\n\nThe firm, which has a reputation for making well-timed and occasionally\\controversial plays in the defense industry"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 38,
+    "total_tokens_orig": 51,
+    "exact_text": "\n\nThe Dow Jones industrial average closed up 0.9 percent at $1,919.50, while the S&P 500 closed up 0.9 percent at $1,919.50.\n\nThe Dow Jones industrial average closed up 0.9 percent at $1,919.50",
+    "ref_text": " oil prices are expected to fall to $50 a barrel on Thursday, and the Dow Jones Industrial Average is down 0.5 percent to 2,821.\n\nThe Dow Jones Industrial Average is down 0.5 percent to 2,821.\n\nThe Dow Jones Industrial Average is down 0.5 percent",
+    "reuse_text": " oil prices are expected to fall to $50 a barrel on Thursday, and the Dow Jones Industrial Average is down 0.5 percent to 2,821.\n\nThe Dow Jones Industrial Average is down 0.5 percent to 2,821.\n\nThe Dow Jones Industrial Average is down 0.5 percent"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 36,
+    "total_tokens_orig": 49,
+    "exact_text": "\n\nThe government said on Saturday that it had halted oil exports from the main pipeline in southern Iraq after intelligence showed a rebel militia could strike the infrastructure.\n\nThe government said on Saturday that it had halted oil exports from the main pipeline in southern Iraq after intelligence showed a rebel militia could strike the infrastructure.\n\n",
+    "ref_text": " be used to stop the flow of oil from the main pipeline.\n\nIraqi security forces have been battling insurgents in the northern city of Kirkuk, which is controlled by the Kurdistan Workers' Party (PKK), for control of the oil fields.\n\nThe Kurdish government has been fighting the insurgents for control of",
+    "reuse_text": " be used to stop the flow of oil from the main pipeline.\n\nIraqi security forces have been battling insurgents in the northern city of Kirkuk, which is controlled by the Kurdistan Workers' Party (PKK), for control of the oil fields.\n\nThe Kurdish government has been fighting the insurgents for control of"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 36,
+    "total_tokens_orig": 49,
+    "exact_text": "\n\nThe US oil industry is struggling to cope with the rising cost of crude oil, which has risen by more than 50% since the mid-1990s.\n\nThe US has been the world's biggest exporter of crude oil, with more than $1 trillion in exports in 2014, according to the International",
+    "ref_text": " year.\n\nThe US has been the world's biggest exporter of crude oil since the 1970s, and has been the world's biggest exporter of crude oil since the 1970s, and has been the world's biggest exporter of crude oil since the 1970s, according to a new report by the International",
+    "reuse_text": " year.\n\nThe US has been the world's biggest exporter of crude oil since the 1970s, and has been the world's biggest exporter of crude oil since the 1970s, and has been the world's biggest exporter of crude oil since the 1970s, according to a new report by the International"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 47,
+    "total_tokens_orig": 63,
+    "exact_text": " for the first time since March.\n\nThe Dow Jones industrial average closed down 0.9 percent at $1,919.50, while the S&P 500 closed down 0.9 percent at $1,919.50.\n\nThe S&P 500 closed down 0.9 percent at",
+    "ref_text": ".com (Od. at $1.01)\n\nThe Dow Jones industrial average closed down 0.9 percent at $1,819.50, while the S&P 500 closed down 0.9 percent at $1,819.50.\n\nThe S&P 500 closed down",
+    "reuse_text": ".com (Od. at $1.01)\n\nThe Dow Jones industrial average closed down 0.9 percent at $1,819.50, while the S&P 500 closed down 0.9 percent at $1,819.50.\n\nThe S&P 500 closed down"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 39,
+    "total_tokens_orig": 53,
+    "exact_text": " The index fell 0.1 percent to \u00a0#36;1.17 billion. The index fell 0.1 percent to \u00a0#36;849.98 trillion, the Investment Company Institute said Thursday. The index fell 0.1 percent to \u00a0#36;849.98 trillion, the",
+    "ref_text": "% of its assets were in the U.S. and $1.1 trillion in foreign assets. The company said it expects to add $1.1 trillion to its portfolio by the end of the year.\n\nThe U.S. dollar has fallen sharply against the euro since the financial crisis, and the",
+    "reuse_text": "% of its assets were in the U.S. and $1.1 trillion in foreign assets. The company said it expects to add $1.1 trillion to its portfolio by the end of the year.\n\nThe U.S. dollar has fallen sharply against the euro since the financial crisis, and the"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 42,
+    "total_tokens_orig": 57,
+    "exact_text": " The unemployment rate fell to 4.7 percent from 5.7 percent in July, the Labor Department said. The unemployment rate for the full-time workforce fell to 4.7 percent from 5.7 percent in July, the Labor Department said. The unemployment rate for part-time workers fell to 4.7 percent",
+    "ref_text": " Fed's latest data show that the economy is growing at a 2.5 percent pace, the fastest pace since the start of the year. The Fed's latest data show that the economy is growing at a 2.5 percent pace, the fastest pace since the start of the year. The Fed's latest data show that",
+    "reuse_text": " Fed's latest data show that the economy is growing at a 2.5 percent pace, the fastest pace since the start of the year. The Fed's latest data show that the economy is growing at a 2.5 percent pace, the fastest pace since the start of the year. The Fed's latest data show that"
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 73,
+    "total_tokens_orig": 98,
+    "exact_text": " \"I was just trying to make money.\"\n\nRiley's first job was as a sales representative for a major insurance company. He was hired by the company to help with the sales of insurance. He was hired by the company to help with the sales of insurance.\n\nRiley's first job was as",
+    "ref_text": " who was a real estate agent, and he was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent.",
+    "reuse_text": " who was a real estate agent, and he was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent. He was a real estate agent."
+  },
+  {
+    "model": "gpt2",
+    "dataset": "ag_news",
+    "shared_ratio": 0.75,
+    "shared_tokens": 29,
+    "total_tokens_orig": 39,
+    "exact_text": "\n\nThe Dow Jones industrial average closed down 1.5 percent at $1,091.50 on Wednesday, its lowest level since March.\n\nThe S&P 500 index closed down 1.3 percent at $1,091.50, its lowest level since March.\n\nThe Nasdaq",
+    "ref_text": "cling to the top of the market, and the stock market is on the verge of a comeback.\n\nThe stock market is on the verge of a comeback. REUTERS/Brendan McDermid\n\nThe stock market is on the verge of a comeback.\n\nThe stock market is on the verge of a",
+    "reuse_text": "cling to the top of the market, and the stock market is on the verge of a comeback.\n\nThe stock market is on the verge of a comeback. REUTERS/Brendan McDermid\n\nThe stock market is on the verge of a comeback.\n\nThe stock market is on the verge of a"
+  }
+]

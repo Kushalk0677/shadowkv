@@ -8,13 +8,13 @@
 
 | Model | Params | Samples | Exact Match | ROUGE-L | Fidelity |
 |-------|--------|---------|-------------|---------|----------|
-| TinyLlama | 1.1B | 640 | 96.8% | **0.966** | Safe |
-| Gemma 2B | 2.0B | 640 | 95.1% | **0.974** | Safe |
-| Phi-3 Mini | 3.8B | 640 | 83.7% | **0.931** | Acceptable |
-| GPT-2 | 124M | 640 | 79.2% | **0.876** | Acceptable |
+| TinyLlama | 1.1B | 640 | 96.8% | **0.966** | Robust in this check |
+| Gemma 2B | 2.0B | 640 | 95.1% | **0.974** | Robust in this check |
+| Phi-3 Mini | 3.8B | 640 | 83.7% | **0.931** | Needs validation |
+| GPT-2 | 124M | 640 | 79.2% | **0.876** | Needs validation |
 | Qwen 2.5 1.5B | 1.5B | 640 | 0.8% | **0.200** | Needs guard |
 
-**Key finding**: LLaMA-family (TinyLlama) and Gemma architectures show near-perfect fidelity (ROUGE-L > 0.96). Qwen2 fails catastrophically in float16 due to precision-architecture interaction (Section 3).
+**Key finding**: LLaMA-family (TinyLlama) and Gemma architectures show high fidelity in this check (ROUGE-L > 0.96). Qwen2 is highly sensitive in float16 due to a precision-architecture interaction (Section 3).
 
 ### 1.2 Prompt Sensitivity (exact vs ref) - Baseline
 
@@ -74,16 +74,16 @@ The precision-dependent fidelity loss has two components:
 
 ### 3.2 Recommendation
 
-**Measure KV reuse fidelity in deployment precision.** CPU float32 results DO NOT generalize to GPU float16. For production systems using LLaMA/Gemma in float16, expect ~97% ROUGE-L fidelity. For Qwen2-family models in float16, the `_partial_semantic_reuse` mechanism requires additional quality guards.
+**Measure KV reuse fidelity in deployment precision.** CPU float32 results DO NOT generalize to GPU float16. For LLaMA/Gemma-style models in this float16 check, observed ROUGE-L was about 0.97. For Qwen2-family models in float16, approximate partial semantic reuse requires additional quality guards.
 
 ## 4. Architecture Comparison Summary
 
-| Architecture | float32 Fidelity | float16 Fidelity | Sensitivity | Safe for Reuse? |
+| Architecture | float32 Fidelity | float16 Fidelity | Sensitivity | Reuse stance |
 |-------------|-----------------|-----------------|-------------|-----------------|
-| LLaMA (TinyLlama) | 1.0 | 0.966 | 0.235 | Yes |
-| Gemma (2B) | 1.0 | 0.974 | 0.305 | Yes |
-| Phi-3 (Mini) | - | 0.931 | 0.252 | Yes |
-| GPT-2 | - | 0.876 | 0.320 | Yes, with monitoring |
+| LLaMA (TinyLlama) | 1.0 | 0.966 | 0.235 | Promising; validate per deployment |
+| Gemma (2B) | 1.0 | 0.974 | 0.305 | Promising; validate per deployment |
+| Phi-3 (Mini) | - | 0.931 | 0.252 | Validate and guard |
+| GPT-2 | - | 0.876 | 0.320 | Validate and monitor |
 | Qwen2 (1.5B) | ~0.99 | 0.200 | 0.221 | Needs precision guard |
 
 ## 5. Coupled Utility and Risk-Averse Admission
@@ -125,7 +125,7 @@ The coupling penalty is complementary to the memory-breakeven guard. The guard i
 
 ## 6. Implications for ShadowKV++
 
-1. **Safe architectures**: LLaMA and Gemma models can use `_partial_semantic_reuse` without quality degradation in both float32 and float16.
+1. **Promising architectures**: LLaMA and Gemma models showed strong fidelity in these checks, but approximate partial semantic reuse should still be validated for the deployed model, precision, and backend.
 
 2. **Precision-aware design**: The `allow_approximate_semantic_reuse` flag should consider the deployment precision. Float16 deployments should use a higher `semantic_similarity_threshold`.
 
@@ -133,4 +133,4 @@ The coupling penalty is complementary to the memory-breakeven guard. The guard i
 
 4. **Risk-averse extension**: The coupling penalty adds a tunable risk parameter lambda. At lambda=0 the extension is disabled and the base policy is recovered exactly. The ablation over {0, 0.05, 0.15, 0.30} bounds the sensitivity.
 
-5. **Prompt sensitivity bound**: The prompt sensitivity metric (0.22-0.32 ROUGE-L) provides a natural lower bound - KV reuse never degrades quality below the model's inherent variability from prompt rephrasing.
+5. **Prompt sensitivity bound**: The prompt sensitivity metric (0.22-0.32 ROUGE-L) is useful context, but it should not be used to claim blanket safety. Qwen is the counterexample in these results.
