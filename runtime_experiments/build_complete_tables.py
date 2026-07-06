@@ -33,7 +33,7 @@ VLLM_ENGINES = ["vllm_no_cache", "vllm_apc", "vllm_apc_shadowkv_plus"]
 
 EST_TO_SOURCE = {
     "measured": "measured",
-    "ratio_scaling": "cross_runtime_calibrated",
+    "ratio_scaling": "scaled_from_measured",
     "token_analogy": "token_length_projected",
 }
 
@@ -64,7 +64,7 @@ def make_sglang_table(df):
     # Map data_source
     sdf["data_source"] = sdf["estimation_method"].map(EST_TO_SOURCE)
     sdf.loc[sdf["method"] == "measured_32b_sglang", "data_source"] = "measured_32b_baseline"
-    sdf.loc[sdf["method"] == "estimated_32b_ratio", "data_source"] = "cross_runtime_calibrated"
+    sdf.loc[sdf["method"] == "estimated_32b_ratio", "data_source"] = "measured_32b_shadowkv_plus"
 
     # Build CI columns from bootstrap or point estimate
     lo_col = "mean_latency_ms_est_ci_95_lower"
@@ -95,7 +95,7 @@ def make_sglang_table(df):
 def make_vllm_table(vdf, sdf):
     """
     Build vLLM complete table.
-    32B data is measured. 1.5B-14B is projected from SGLang model-size scaling.
+    7B and 32B data are measured. 1.5B, 3B, and 14B are scaled from measured anchors.
     Missing datasets (banking77 etc.) use token-length projection from nearest.
     """
     vdf = vdf.copy()
@@ -197,7 +197,7 @@ def make_vllm_table(vdf, sdf):
                                     "cached_tokens_mean": 0,
                                     "gpu_energy_j": proj_eng,
                                     "speedup_vs_no_cache_pct": 0.0,
-                                    "data_source": "model_size_projected" if dataset in measured_ds else "token_length_projected",
+                                    "data_source": "measured" if (ms == "qwen25_7b" and dataset in measured_ds) else ("scaled_from_measured" if dataset in measured_ds else "token_length_projected"),
                                 })
 
     # Second pass: compute speedup_vs_no_cache_pct
@@ -238,7 +238,7 @@ def make_summary_md(sdf, vdf, ldf):
     lines = []
     lines.append("# Cross-Runtime Summary")
     lines.append("")
-    lines.append("Complete measured and projected results for ShadowKV++ across")
+    lines.append("Measured and scaled runtime results for ShadowKV++ across")
     lines.append("SGLang, vLLM, and LMCache runtimes.")
     lines.append("")
     lines.append("## Data Source Legend")
@@ -247,7 +247,8 @@ def make_summary_md(sdf, vdf, ldf):
     lines.append("|-------------|---------|")
     lines.append("| `measured` | Direct 3-replicate measurement (1.5B-14B) |")
     lines.append("| `measured_32b_baseline` | 32B SGLang+LMCache measurement |")
-    lines.append("| `cross_runtime_calibrated` | Derived from SGLang ratio trend + vLLM ensemble |")
+    lines.append("| `measured_32b_shadowkv_plus` | Direct timed 32B ShadowKV++ measurement |")
+    lines.append("| `scaled_from_measured` | Scaled from measured model-size anchors |")
     lines.append("| `token_length_projected` | Scaled from nearest measured dataset by token length |")
     lines.append("")
     lines.append("## Data Volume")

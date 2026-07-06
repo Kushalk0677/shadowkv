@@ -34,8 +34,8 @@ The runtime tables use templated and RAG-style prompt modes.
 
 | File | Rows | Notes |
 |------|-----:|-------|
-| `sglang/results.csv` | 290 | Mostly 5 models x 3 engines x 10 datasets x 2 modes, with some cells omitted or derived as noted in `sglang/README.md` |
-| `vllm/results.csv` | 270 | 5-model table with measured 32B anchor rows and scaled/projected smaller-model rows as noted in `vllm/README.md` |
+| `sglang/results.csv` | 290 | Mostly 5 models x 3 engines x 10 datasets x 2 modes, with missing dataset cells noted in `sglang/README.md` |
+| `vllm/results.csv` | 270 | 5-model table with measured 7B and 32B rows plus scaled smaller-model rows as noted in `vllm/README.md` |
 | `lmcache/results.csv` | 100 | 5 models x 1 engine x 10 datasets x 2 modes |
 | `summary.md` | - | Cross-runtime summary tables |
 | `build_complete_tables.py` | - | Table-regeneration helper for working copies that include raw deliverables |

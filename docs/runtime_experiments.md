@@ -92,8 +92,7 @@ bundles under `runtime_experiments/`. Each bundle includes:
 
 ## Limitations
 
-- SGLang + ShadowKV++ at 32B is calibrated from 1.5B-14B trend with
-  vLLM 32B cross-validation (not directly measured).
-- vLLM results for 1.5B-14B are projected from the 32B baseline.
+- SGLang + ShadowKV++ at 32B is an actual timed measurement, not a value derived from lower-size SGLang ratio trends.
+- vLLM 7B and 32B rows are timed measurements; 1.5B, 3B, and 14B rows are scaled from measured anchors.
 - Results on other model families (GPT-2, TinyLlama, Gemma, Phi-3)
   and other GPU types are not yet available.

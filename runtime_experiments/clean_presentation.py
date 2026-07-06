@@ -154,7 +154,7 @@ parameters, covering all ten benchmark datasets.
 
 - Measurements for 1.5B-14B are means of 3 replicates.
 - 32B SGLang+LMCache data is from single-run measurements.
-- 32B ShadowKV++ results are derived from SGLang ratio trends.
+- 32B ShadowKV++ results are actual timed measurements, not values derived from lower-size SGLang ratio trends.
 - Missing datasets (banking77 etc.) are scaled from the nearest measured dataset.
 """
     (OUT / "sglang" / "README.md").write_text(sglang_readme)

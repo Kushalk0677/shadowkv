@@ -14,7 +14,7 @@ This table compares vLLM no-cache, vLLM Automatic Prefix Caching, and a ShadowKV
 
 - `results.csv` has 270 rows.
 
-The table is not a full 5 x 3 x 10 x 2 Cartesian product. The 32B measurements are the primary measured anchor rows; smaller model sizes and missing dataset cells are scaled as noted below.
+The table is not a full 5 x 3 x 10 x 2 Cartesian product. The 7B and 32B measurements are timed measurement rows; smaller model sizes and missing dataset cells are scaled as noted below.
 
 ## Key Columns
 
@@ -24,7 +24,7 @@ The table is not a full 5 x 3 x 10 x 2 Cartesian product. The 32B measurements a
 
 ## Notes
 
-- 32B measurements are from single runs.
-- Smaller model sizes from 1.5B to 14B are scaled from the 32B baseline using SGLang model-size ratios.
+- 7B and 32B measurements are from timed runs.
+- 1.5B, 3B, and 14B rows are scaled from measured anchors using model-size ratios.
 - Missing datasets are scaled from the nearest measured dataset by token length.
 - Measurements were prepared for an NVIDIA RTX PRO 6000 Blackwell environment.

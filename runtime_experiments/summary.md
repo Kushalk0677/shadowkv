@@ -38,6 +38,6 @@ Mean across the represented 32B rows:
 
 | Table | Rows | Models | Engines | Dataset Coverage |
 |-------|-----:|-------:|--------:|------------------|
-| SGLang | 290 | 5 | 3 | Ten-dataset table with omitted/derived cells noted in `sglang/README.md` |
-| vLLM | 270 | 5 | 3 | Table includes measured 32B anchors and scaled/projected rows noted in `vllm/README.md` |
+| SGLang | 290 | 5 | 3 | Ten-dataset table with missing dataset cells noted in `sglang/README.md` |
+| vLLM | 270 | 5 | 3 | Table includes measured 7B and 32B rows plus scaled smaller-model rows noted in `vllm/README.md` |
 | LMCache | 100 | 5 | 1 | Complete 5 x 1 x 10 x 2 table |

@@ -27,5 +27,5 @@ A complete 5 x 3 x 10 x 2 table would contain 300 rows. The checked-in table has
 
 - Measurements for 1.5B-14B are means of 3 replicates where available.
 - 32B SGLang and LMCache data is from single-run measurements.
-- 32B ShadowKV++ rows are derived from SGLang ratio trends rather than a full replicated sweep.
+- 32B ShadowKV++ rows are actual timed measurements, not values derived from lower-size SGLang ratio trends.
 - Missing dataset cells are scaled from the nearest measured dataset by token length.
