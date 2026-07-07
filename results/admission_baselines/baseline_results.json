@@ -1,0 +1,178 @@
+[
+  {
+    "workload": "templated",
+    "engine": "MeritKV",
+    "speedup": 3.1309,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 31.28
+  },
+  {
+    "workload": "templated",
+    "engine": "ShadowKV (no waste)",
+    "speedup": 2.8257,
+    "waste": 0.0,
+    "hit_rate": 0.95,
+    "mean_latency_ms": 34.66
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: len>=16",
+    "speedup": 3.0483,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 32.13
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: len>=32",
+    "speedup": 3.0483,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 32.13
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: len>=48",
+    "speedup": 1.0,
+    "waste": 0.0,
+    "hit_rate": 0.0,
+    "mean_latency_ms": 97.94
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: len>=64",
+    "speedup": 1.0,
+    "waste": 0.0,
+    "hit_rate": 0.0,
+    "mean_latency_ms": 97.94
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: cost-only",
+    "speedup": 3.1309,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 31.28
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: freq>=3",
+    "speedup": 2.8962,
+    "waste": 0.0,
+    "hit_rate": 0.9625,
+    "mean_latency_ms": 33.82
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: strict",
+    "speedup": 3.0483,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 32.13
+  },
+  {
+    "workload": "templated",
+    "engine": "Gate: greedy",
+    "speedup": 3.0483,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 32.13
+  },
+  {
+    "workload": "templated",
+    "engine": "No cache",
+    "speedup": 1.0,
+    "waste": 0.0,
+    "hit_rate": 0.0,
+    "mean_latency_ms": 97.94
+  },
+  {
+    "workload": "semantic",
+    "engine": "MeritKV",
+    "speedup": 5.094,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 16.28
+  },
+  {
+    "workload": "semantic",
+    "engine": "ShadowKV (no waste)",
+    "speedup": 4.2187,
+    "waste": 0.0,
+    "hit_rate": 0.95,
+    "mean_latency_ms": 19.66
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: len>=16",
+    "speedup": 4.8422,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 17.13
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: len>=32",
+    "speedup": 4.8422,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 17.13
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: len>=48",
+    "speedup": 1.0,
+    "waste": 0.0,
+    "hit_rate": 0.0,
+    "mean_latency_ms": 82.94
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: len>=64",
+    "speedup": 1.0,
+    "waste": 0.0,
+    "hit_rate": 0.0,
+    "mean_latency_ms": 82.94
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: cost-only",
+    "speedup": 5.094,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 16.28
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: freq>=3",
+    "speedup": 4.4079,
+    "waste": 0.0,
+    "hit_rate": 0.9625,
+    "mean_latency_ms": 18.82
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: strict",
+    "speedup": 4.8422,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 17.13
+  },
+  {
+    "workload": "semantic",
+    "engine": "Gate: greedy",
+    "speedup": 4.8422,
+    "waste": 0.0,
+    "hit_rate": 0.9875,
+    "mean_latency_ms": 17.13
+  },
+  {
+    "workload": "semantic",
+    "engine": "No cache",
+    "speedup": 1.0,
+    "waste": 0.0,
+    "hit_rate": 0.0,
+    "mean_latency_ms": 82.94
+  }
+]

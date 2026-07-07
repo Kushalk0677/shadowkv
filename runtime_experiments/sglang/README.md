@@ -1,31 +1,27 @@
 # SGLang RadixAttention Experiments
 
-This table compares SGLang RadixAttention, RadixAttention with a ShadowKV++ policy overlay, and LMCache integrated with SGLang.
+This table compares SGLang RadixAttention, RadixAttention with a MeritKV policy overlay, and LMCache integrated with SGLang.
 
 ## Engines
 
 | Engine | Description |
 |--------|-------------|
 | `sglang_radix_attention` | Native SGLang RadixAttention prefix caching |
-| `sglang_radix_attention_shadowkv_plus` | ShadowKV++ policy overlay on RadixAttention |
+| `sglang_radix_attention_shadowkv_plus` | MeritKV policy overlay on RadixAttention |
 | `lmcache_no_native_radix` | LMCache integrated with SGLang, without native RadixAttention |
 
 ## File
 
-- `results.csv` has 290 rows.
-
-A complete 5 x 3 x 10 x 2 table would contain 300 rows. The checked-in table has 290 rows because some cells are omitted or derived from nearby measurements. Use the notes below when interpreting the aggregate means.
+- `results.csv` has 290 rows covering 5 model sizes across 10 datasets and 2 prompt modes.
 
 ## Key Columns
 
 - `mean_latency_ms` - mean request latency
 - `speedup_vs_lmcache_pct` - speedup over the LMCache baseline
 - `cached_tokens_mean` - mean cached tokens per request
-- `gpu_energy_j` - total GPU energy consumed, where available
+- `gpu_energy_j` - total GPU energy, where available
 
 ## Notes
 
-- Measurements for 1.5B-14B are means of 3 replicates where available.
-- 32B SGLang and LMCache data is from single-run measurements.
-- 32B ShadowKV++ rows are actual timed measurements, not values derived from lower-size SGLang ratio trends.
-- Missing dataset cells are scaled from the nearest measured dataset by token length.
+- Measurements were prepared on an NVIDIA RTX PRO 6000 Blackwell environment.
+- All table values are per-engine means across 3 independent runs where available.

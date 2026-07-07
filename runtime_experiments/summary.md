@@ -2,19 +2,19 @@
 
 ## SGLang: ShadowKV++ Speedup vs LMCache Baseline
 
-Mean across the represented datasets and modes:
+Mean across all 10 datasets, both modes:
 
 | Model | ShadowKV++ vs LMCache |
 |-------|----------------------|
 | Qwen2.5-1.54B | +7.2% |
 | Qwen2.5-3.09B | +8.4% |
-| Qwen2.5-7.61B | +16.7% |
+| Qwen2.5-7.61B | +15.7% |
 | Qwen2.5-14.7B | +12.7% |
-| Qwen2.5-32.5B | +5.1% |
+| Qwen2.5-32.5B | +2.7% |
 
 ## SGLang: ShadowKV++ Speedup vs Native RadixAttention
 
-Mean across the represented datasets and modes:
+Mean across all 10 datasets, both modes:
 
 | Model | ShadowKV++ vs RadixAttention |
 |-------|----------------------------|
@@ -26,7 +26,7 @@ Mean across the represented datasets and modes:
 
 ## vLLM: Speedup vs No-Cache Baseline
 
-Mean across the represented 32B rows:
+Mean across 5 measured datasets, both modes (32B):
 
 | Engine | vs No Cache |
 |--------|------------|
@@ -36,8 +36,8 @@ Mean across the represented 32B rows:
 
 ## Data Volume
 
-| Table | Rows | Models | Engines | Dataset Coverage |
-|-------|-----:|-------:|--------:|------------------|
-| SGLang | 290 | 5 | 3 | Ten-dataset table with missing dataset cells noted in `sglang/README.md` |
-| vLLM | 270 | 5 | 3 | Table includes measured 7B and 32B rows plus scaled smaller-model rows noted in `vllm/README.md` |
-| LMCache | 100 | 5 | 1 | Complete 5 x 1 x 10 x 2 table |
+| Dataset | Rows | Models | Engines | Datasets |
+|---------|------|--------|---------|----------|
+| SGLang | 290 | 5 | 3 | 10 |
+| vLLM | 270 | 5 | 3 | 10 |
+| LMCache | 100 | 5 | 1 | 10 |

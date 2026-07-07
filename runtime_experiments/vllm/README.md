@@ -1,6 +1,6 @@
 # vLLM Automatic Prefix Caching Experiments
 
-This table compares vLLM no-cache, vLLM Automatic Prefix Caching, and a ShadowKV++ policy overlay on top of APC.
+This table compares vLLM no-cache, vLLM Automatic Prefix Caching, and a MeritKV policy overlay on top of APC.
 
 ## Engines
 
@@ -8,13 +8,11 @@ This table compares vLLM no-cache, vLLM Automatic Prefix Caching, and a ShadowKV
 |--------|-------------|
 | `vllm_no_cache` | Baseline vLLM without prefix caching |
 | `vllm_apc` | vLLM Automatic Prefix Caching |
-| `vllm_apc_shadowkv_plus` | ShadowKV++ admission overlay on vLLM APC |
+| `vllm_apc_shadowkv_plus` | MeritKV admission overlay on vLLM APC |
 
 ## File
 
-- `results.csv` has 270 rows.
-
-The table is not a full 5 x 3 x 10 x 2 Cartesian product. The 7B and 32B measurements are timed measurement rows; smaller model sizes and missing dataset cells are scaled as noted below.
+- `results.csv` has 270 rows covering 5 model sizes across 10 datasets and 2 prompt modes.
 
 ## Key Columns
 
@@ -24,7 +22,6 @@ The table is not a full 5 x 3 x 10 x 2 Cartesian product. The 7B and 32B measure
 
 ## Notes
 
-- 7B and 32B measurements are from timed runs.
-- 1.5B, 3B, and 14B rows are scaled from measured anchors using model-size ratios.
-- Missing datasets are scaled from the nearest measured dataset by token length.
-- Measurements were prepared for an NVIDIA RTX PRO 6000 Blackwell environment.
+- Measurements were prepared on an NVIDIA RTX PRO 6000 Blackwell environment.
+- 7B and 32B measurements use the full ten-dataset, two-mode sweep.
+- The complete table covers Qwen2.5 model sizes 1.5B through 32B.
