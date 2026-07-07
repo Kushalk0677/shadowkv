@@ -10,7 +10,7 @@ This file is the reviewer's map from each paper claim to the table, raw log, and
 
 **Table:** Table X (headline engine comparison), Figures showing speedup CDF
 
-**Raw logs:** `results/controlled_results/t4/` and `results/controlled_results/p100/` — 898 benchmark JSON files (5 models, 10 datasets, 3 prompt modes, 3 seeds, two GPU types)
+**Raw logs:** `results/controlled_results/t4/` and `results/controlled_results/p100/` — 898 benchmark JSON files (900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable in the source bundle). 5 models, 10 datasets, 3 prompt modes, 3 seeds, two GPU types.
 
 **Aggregate CSVs:**
 - `results/controlled_results/summary_by_engine.csv` — headline speedup, waste, hit rate, 95% CI per engine
@@ -449,7 +449,7 @@ python experiments/run_blackwell_semantic_n128.py
 **Paper claim:** ShadowKV++ behaviour is consistent across controlled benchmark conditions and process-isolated realistic conditions, confirming that speedup gains are not artifacts of one in-process benchmark layout.
 
 **Directories:**
-- `results/controlled_results/` — 898 benchmark JSONs, aggregate CSVs
+- `results/controlled_results/` — 898 benchmark JSONs (900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable in the source bundle), and aggregate CSVs
 - `results/realistic_results/` — 3,000 process-isolated JSONs (no_cache and shadow_kv_plus)
 
 **Architecture invariant:** Both regimes use the same core components (TieredStateBank, AdaptiveReuseController, CostAwareSlackPolicy, SemanticKVIndex). Only the execution infrastructure (in-process harness vs per-engine subprocess boundary) differs.
@@ -460,7 +460,7 @@ python experiments/run_blackwell_semantic_n128.py
 
 ## 16. Confidence Intervals
 
-**Paper claim:** All headline speedups include 95% bootstrap confidence intervals across 898 benchmark runs (3 seeds, 2 GPUs).
+**Paper claim:** All headline speedups include 95% bootstrap confidence intervals across 898 benchmark runs (900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable in the source bundle).
 
 **Source:** `results/controlled_results/summary_by_engine.csv`
 
@@ -476,7 +476,7 @@ python experiments/run_blackwell_semantic_n128.py
 
 | Claim | CSVs / Tables | Raw JSON logs | Reproduction script |
 |-------|---------------|---------------|---------------------|
-| Headline HF evaluation | `results/controlled_results/summary_by_engine.csv` | `results/controlled_results/t4/`, `p100/` (898 files) | `run_p100_isolated_sweep.py` |
+| Headline HF evaluation | `results/controlled_results/summary_by_engine.csv` | `results/controlled_results/t4/`, `p100/` (898 of 900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable) | `run_p100_isolated_sweep.py` |
 | MeritKV beats cost-only / ShadowKV | `results/mixed_traffic/MIXED_TRAFFIC_RESULTS.md` | `results/mixed_traffic/mixed_results.json` | `run_admission_baselines.py` |
 | Blackwell admission baselines | `results/mixed_traffic/MIXED_TRAFFIC_RESULTS.md` §1.3 | `results/mixed_traffic/mixed_results.json` | `run_admission_baselines.py` |
 | Memory-bound recovery | `results/mixed_traffic/MEMORY_BOUND_RESULTS.md` | `results/memory_bound_trace/trace_results.json` | `run_memory_bound_trace.py` |

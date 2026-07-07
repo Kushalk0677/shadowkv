@@ -1,4 +1,4 @@
-﻿# Canonical Result Bundle
+# Canonical Result Bundle
 
 This directory is the public result bundle for the ShadowKV / ShadowKV++ draft. It keeps the controlled aggregate results, realistic isolated-result traces, fidelity examples, and small timing smoke outputs in one place.
 
@@ -31,7 +31,7 @@ controlled_results/p100/**/benchmark_*.json
 Current controlled bundle contents:
 
 ```text
-Benchmark JSON files: 898
+Benchmark JSON files: 898 (900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable in the source bundle. See manifest.json for details.)
 Engine rows summarized: 8532
 Hardware roots: controlled_results/t4, controlled_results/p100
 Seeds: 42, 123, 456
@@ -77,3 +77,4 @@ Use these files to inspect isolated no-cache and ShadowKV++ behavior under a cle
 - Approximate semantic KV substitution is not correctness-preserving by default. Semantic opportunities should be discussed with explicit correctness boundaries.
 - High hit rate alone is not a win. Use matched latency and energy columns where available.
 - `controlled_results/summary_by_engine.csv` and `controlled_results/summary_by_mode_engine.csv` are generated from the controlled benchmark JSON files.
+
