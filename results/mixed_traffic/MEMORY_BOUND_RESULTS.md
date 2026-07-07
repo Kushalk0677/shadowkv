@@ -11,8 +11,8 @@
 | 2 — Churn | 30 | 15 new-prefix evictors + 15 reusing Phase 1 prefix (victims) | Force eviction, measure victim misses |
 | 3 — Recovery | 30 | 30 requests repeating Phase 1 template | Measure cache recovery after churn |
 
-Hardware: RTX PRO 6000 Blackwell (96 GB, vLLM APC, 10 reps) and
-NVIDIA T4 (16 GB, HF prefix caching, 5 seeds). Model: Qwen2.5-7B-Instruct.
+Hardware: RTX PRO 6000 Blackwell (96 GB, vLLM APC, 10 reps, Qwen2.5-32B) and
+NVIDIA T4 (16 GB, HF prefix caching, 5 seeds, Qwen2.5-7B).
 
 ### Baselines
 
@@ -25,7 +25,7 @@ NVIDIA T4 (16 GB, HF prefix caching, 5 seeds). Model: Qwen2.5-7B-Instruct.
 
 ---
 
-## Blackwell Results (vLLM APC, 10 replicates)
+## Blackwell Results (vLLM APC, Qwen2.5-32B, 10 replicates)
 
 Headline result. 96 GB VRAM, production-grade PagedAttention.
 APC waste = stored-but-unreused KV bytes.
@@ -67,7 +67,7 @@ rate to 71%. The asymmetry is a capacity effect, not a logic error.
 
 ---
 
-## T4 Results (HF Prefix Caching, 5 seeds)
+## T4 Results (HF Prefix Caching, Qwen2.5-7B, 5 seeds)
 
 Smaller cache amplifies eviction pathology. Waste = speculative precompute.
 
