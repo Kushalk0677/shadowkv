@@ -1,0 +1,77 @@
+{
+  "checks": {
+    "all_expected_rows_present": true,
+    "all_models_present_with_30_cells": true,
+    "all_result_jsons_present": true,
+    "no_numeric_failures": true,
+    "shadowkv_plus_all_cells_127_reuses": true,
+    "shadowkv_plus_all_cells_exact_scaffold_only": true,
+    "shadowkv_plus_all_cells_zero_waste": true,
+    "zero_reuse_backend_fallbacks": true
+  },
+  "expected_counts": {
+    "all_results": 210,
+    "comparisons": 140,
+    "reuse_path_breakdown": 140
+  },
+  "expected_models": [
+    "Qwen/Qwen2.5-1.5B-Instruct",
+    "Qwen/Qwen2.5-3B-Instruct",
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "google/gemma-4-12B-it",
+    "google/gemma-4-E2B-it",
+    "gpt2",
+    "microsoft/Phi-3-mini-4k-instruct"
+  ],
+  "missing_comparison_metrics": {
+    "energy_reduction_vs_no_cache_pct": 0,
+    "hit_rate": 0,
+    "idle_adjusted_energy_reduction_vs_no_cache_pct": 0,
+    "reuse_successes": 0,
+    "reused_prefix_tokens_total": 0,
+    "speedup_vs_no_cache_mean": 0,
+    "speedup_vs_no_cache_p95": 0,
+    "wasted_compute_ratio": 0
+  },
+  "model_counts": {
+    "Qwen/Qwen2.5-1.5B-Instruct": 30,
+    "Qwen/Qwen2.5-3B-Instruct": 30,
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0": 30,
+    "google/gemma-4-12B-it": 30,
+    "google/gemma-4-E2B-it": 30,
+    "gpt2": 30,
+    "microsoft/Phi-3-mini-4k-instruct": 30
+  },
+  "numeric_failure_totals": {},
+  "result_json_count": 210,
+  "reuse_backend_fallbacks_total": 0,
+  "row_counts": {
+    "all_results": 210,
+    "comparisons": 140,
+    "reuse_path_breakdown": 140
+  },
+  "shadowkv_native": {
+    "cells": 70,
+    "nonzero_reuse_cells": 0
+  },
+  "shadowkv_plus": {
+    "cells": 70,
+    "cells_below_mean_parity": 50,
+    "cells_below_p95_parity": 49,
+    "hit_rate_values": [
+      0.9921875
+    ],
+    "path_values": [
+      "exact_scaffold_only"
+    ],
+    "reuse_success_values": [
+      127
+    ],
+    "reused_token_values": [
+      16256
+    ],
+    "waste_ratio_values": [
+      0.0
+    ]
+  }
+}

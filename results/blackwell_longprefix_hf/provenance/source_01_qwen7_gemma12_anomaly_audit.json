@@ -1,0 +1,59 @@
+{
+  "checks": {
+    "all_expected_rows_present": true,
+    "all_result_jsons_present": true,
+    "native_shadowkv_no_reuse": true,
+    "no_numeric_failures": true,
+    "shadowkv_plus_all_cells_127_reuses": true,
+    "shadowkv_plus_all_cells_exact_scaffold_only": true,
+    "shadowkv_plus_all_cells_zero_waste": true,
+    "zero_reuse_backend_fallbacks": true
+  },
+  "expected_counts": {
+    "all_results": 60,
+    "comparisons": 40,
+    "reuse_path_breakdown": 40
+  },
+  "missing_comparison_metrics": {
+    "energy_reduction_vs_no_cache_pct": 0,
+    "hit_rate": 0,
+    "idle_adjusted_energy_reduction_vs_no_cache_pct": 0,
+    "reuse_successes": 0,
+    "reused_prefix_tokens_total": 0,
+    "speedup_vs_no_cache_mean": 0,
+    "speedup_vs_no_cache_p95": 0,
+    "wasted_compute_ratio": 0
+  },
+  "numeric_failure_totals": {},
+  "result_json_count": 60,
+  "reuse_backend_fallbacks_total": 0,
+  "row_counts": {
+    "all_results": 60,
+    "comparisons": 40,
+    "reuse_path_breakdown": 40
+  },
+  "shadowkv_native": {
+    "cells": 20,
+    "nonzero_reuse_cells": 0
+  },
+  "shadowkv_plus": {
+    "cells": 20,
+    "cells_below_mean_parity": 2,
+    "cells_below_p95_parity": 3,
+    "hit_rate_values": [
+      0.9921875
+    ],
+    "path_values": [
+      "exact_scaffold_only"
+    ],
+    "reuse_success_values": [
+      127
+    ],
+    "reused_token_values": [
+      16256
+    ],
+    "waste_ratio_values": [
+      0.0
+    ]
+  }
+}

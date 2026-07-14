@@ -1,0 +1,48 @@
+{
+  "created_at_utc": "2026-07-11T03:42:55.104335+00:00",
+  "pipeline": "blackwell_semantic_n128_isolated",
+  "models": [
+    "Qwen/Qwen2.5-14B-Instruct"
+  ],
+  "normal_models": [
+    "gpt2",
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "Qwen/Qwen2.5-1.5B-Instruct",
+    "google/gemma-2b-it",
+    "microsoft/Phi-3-mini-4k-instruct"
+  ],
+  "large_models": [
+    "Qwen/Qwen2.5-3B-Instruct",
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen2.5-14B-Instruct",
+    "Qwen/Qwen2.5-32B-Instruct"
+  ],
+  "gemma4_models": [
+    "google/gemma-4-12B-it",
+    "google/gemma-4-26b-a4b-it"
+  ],
+  "datasets": [
+    "ag_news"
+  ],
+  "prompt_modes": [
+    "semantic"
+  ],
+  "engines": [
+    "no_cache",
+    "shadow_kv",
+    "shadow_kv_plus"
+  ],
+  "seeds": [
+    42
+  ],
+  "n_requests": 16,
+  "semantic_reuse": "allow_unsafe_semantic_kv_reuse",
+  "semantic_shared_prefix_repeats": 4,
+  "semantic_shared_prefix_mode": "common_scaffold",
+  "isolation": "one_python_subprocess_per_model_dataset_prompt_mode_engine_cell",
+  "total_jobs": 3,
+  "auto_detected_config": {
+    "hardware.max_gpu_memory_mb": 97887,
+    "hardware.pcie_bandwidth_gbps": 32.0
+  }
+}

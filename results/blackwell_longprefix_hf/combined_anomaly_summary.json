@@ -1,0 +1,15 @@
+{
+    "scope":  "combined",
+    "all_expected_rows_present":  true,
+    "all_result_jsons_present":  true,
+    "no_numeric_failures":  true,
+    "shadowkv_plus_all_cells_127_reuses":  true,
+    "shadowkv_plus_all_cells_exact_scaffold_only":  true,
+    "shadowkv_plus_all_cells_zero_waste":  true,
+    "zero_reuse_backend_fallbacks":  true,
+    "all_results":  1800,
+    "comparisons":  1200,
+    "result_json_count":  1800,
+    "shadowkv_plus_cells":  600,
+    "shadowkv_native_nonzero_reuse_cells":  0
+}

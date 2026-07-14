@@ -1,0 +1,9 @@
+{
+    "aggregate_rows":  24,
+    "dataset_rows":  240,
+    "all_results_rows":  1800,
+    "comparisons_rows":  1200,
+    "model_summary_rows":  12,
+    "raw_result_dirs":  22,
+    "seeds":  5
+}

@@ -1,0 +1,2 @@
+"scope","all_expected_rows_present","all_result_jsons_present","no_numeric_failures","shadowkv_plus_all_cells_127_reuses","shadowkv_plus_all_cells_exact_scaffold_only","shadowkv_plus_all_cells_zero_waste","zero_reuse_backend_fallbacks","all_results","comparisons","result_json_count","shadowkv_plus_cells","shadowkv_native_nonzero_reuse_cells"
+"combined","True","True","True","True","True","True","True","1800","1200","1800","600","0"

@@ -1,0 +1,62 @@
+[
+  {
+    "model": "google/gemma-4-31B-it",
+    "seed": 42,
+    "prompt_mode": "semantic",
+    "dataset": "ag_news",
+    "engine": "no_cache",
+    "returncode": 0,
+    "elapsed_sec": 48.276,
+    "output_dir": "results_smoke_gemma4_31b_26b_a4b_longprefix_smoke_20260711/google_gemma-4-31B-it/semantic/seed_42/ag_news/no_cache"
+  },
+  {
+    "model": "google/gemma-4-31B-it",
+    "seed": 42,
+    "prompt_mode": "semantic",
+    "dataset": "ag_news",
+    "engine": "shadow_kv",
+    "returncode": 0,
+    "elapsed_sec": 48.901,
+    "output_dir": "results_smoke_gemma4_31b_26b_a4b_longprefix_smoke_20260711/google_gemma-4-31B-it/semantic/seed_42/ag_news/shadow_kv"
+  },
+  {
+    "model": "google/gemma-4-31B-it",
+    "seed": 42,
+    "prompt_mode": "semantic",
+    "dataset": "ag_news",
+    "engine": "shadow_kv_plus",
+    "returncode": 0,
+    "elapsed_sec": 49.439,
+    "output_dir": "results_smoke_gemma4_31b_26b_a4b_longprefix_smoke_20260711/google_gemma-4-31B-it/semantic/seed_42/ag_news/shadow_kv_plus"
+  },
+  {
+    "model": "google/gemma-4-26B-A4B-it",
+    "seed": 42,
+    "prompt_mode": "semantic",
+    "dataset": "ag_news",
+    "engine": "no_cache",
+    "returncode": 0,
+    "elapsed_sec": 44.169,
+    "output_dir": "results_smoke_gemma4_31b_26b_a4b_longprefix_smoke_20260711/google_gemma-4-26B-A4B-it/semantic/seed_42/ag_news/no_cache"
+  },
+  {
+    "model": "google/gemma-4-26B-A4B-it",
+    "seed": 42,
+    "prompt_mode": "semantic",
+    "dataset": "ag_news",
+    "engine": "shadow_kv",
+    "returncode": 0,
+    "elapsed_sec": 43.474,
+    "output_dir": "results_smoke_gemma4_31b_26b_a4b_longprefix_smoke_20260711/google_gemma-4-26B-A4B-it/semantic/seed_42/ag_news/shadow_kv"
+  },
+  {
+    "model": "google/gemma-4-26B-A4B-it",
+    "seed": 42,
+    "prompt_mode": "semantic",
+    "dataset": "ag_news",
+    "engine": "shadow_kv_plus",
+    "returncode": 0,
+    "elapsed_sec": 43.621,
+    "output_dir": "results_smoke_gemma4_31b_26b_a4b_longprefix_smoke_20260711/google_gemma-4-26B-A4B-it/semantic/seed_42/ag_news/shadow_kv_plus"
+  }
+]
