@@ -1,0 +1,18 @@
+{
+  "no_cache": {
+    "mean_latency_ms": 183.3791419061015,
+    "p50_latency_ms": 168.70881055361338,
+    "p95_latency_ms": 210.8860131920167,
+    "p99_latency_ms": 229.22392738262687,
+    "throughput_rps": 43.62546316252459,
+    "hit_rate": 0.0,
+    "wasted_compute_ratio": 0.0,
+    "reuse_attempts": 0,
+    "reuse_successes": 0,
+    "store_attempts": 32,
+    "store_successes": 0,
+    "requests_seen": 64,
+    "reused_prefix_tokens_total": 0,
+    "recompute_tokens_total": 10652
+  }
+}

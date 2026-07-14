@@ -1,0 +1,8 @@
+engine,count,mean_speedup,mean_hit_rate,mean_waste
+no_cache,360,1.0,0.0,0.0
+shadow_kv,360,1.085,0.7033,0.2396
+shadow_kv_plus,360,1.1098,0.4737,0.0556
+shadow_kv_plus_lite,360,0.9196,0.3167,0.0
+reactive_prefix_cache,360,0.9833,0.3167,0.037
+greedy_prefix_cache,360,0.9938,0.3167,0.0
+strict_reactive_prefix_cache,360,1.0173,0.3167,0.0117

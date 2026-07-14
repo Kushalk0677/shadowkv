@@ -1,0 +1,18 @@
+{
+  "shadow_kv_plus_lite": {
+    "mean_latency_ms": 83.56758966502194,
+    "p50_latency_ms": 76.88218249182019,
+    "p95_latency_ms": 96.10272811477523,
+    "p99_latency_ms": 104.45948708127743,
+    "throughput_rps": 95.73089318559681,
+    "hit_rate": 0.35,
+    "wasted_compute_ratio": 0.0,
+    "reuse_attempts": 32,
+    "reuse_successes": 11,
+    "store_attempts": 32,
+    "store_successes": 11,
+    "requests_seen": 64,
+    "reused_prefix_tokens_total": 4928,
+    "recompute_tokens_total": 5724
+  }
+}

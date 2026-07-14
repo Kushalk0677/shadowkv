@@ -1,0 +1,13 @@
+{
+  "created_at_utc": "2026-07-09T00:00:00Z",
+  "model": "google/gemma/2b/it",
+  "backend": "hf",
+  "device": "cuda",
+  "dtype": "float16",
+  "seed": 42,
+  "engine": "shadow_kv",
+  "gpu": {
+    "gpu_name": "Tesla P100-PCIE-12GB",
+    "cuda_available": true
+  }
+}

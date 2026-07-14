@@ -1,4 +1,4 @@
-﻿# Learned Admission Baseline Math
+# Learned Admission Baseline Math
 
 This note documents the corrected learned admission baseline used to compare against MeritKV's hand-derived per-request utility rule. The baseline is intentionally small: it does not learn a new cache system, a new semantic matcher, or a new KV execution path. It only learns the final admit/bypass decision from logged request-level features.
 
@@ -295,35 +295,13 @@ learned_policy_flip_to_admit_total
 learned_policy_flip_to_bypass_total
 ```
 
-The full P100 reporting wrapper also runs a memory-bound
-victim/distractor/recovery trace against the same learned policies:
-
-```text
-results/learned_baseline_5seed_all_models/summary_memory_bound_all_models.json
-results/learned_baseline_5seed_all_models/<model_slug>/memory_bound/memory_bound_aggregate.json
-```
-
-Those files answer the locality question that the public-dataset Phase 3 table
-does not answer on its own: whether a single-request learned label preserves
-useful prefixes under eviction pressure. The key fields are:
-
-```text
-victim_recovery_hit_rate
-first_recovery_hit_rate
-victim_recovery_speedup_vs_no_cache
-evictions
-peak_memory_used_mb
-learned_policy_flip_to_admit_total
-learned_policy_flip_to_bypass_total
-```
-
 ## Interpretation
 
 If Learned-Raw performs well, then much of the admission decision can be recovered from raw request/cache signals.
 
 If Learned-UtilityComponents improves over MeritKV, then B/C/W are useful but may benefit from learned reweighting.
 
-If MeritKV beats both learned variants, that supports the claim that the hand-derived per-request utility rule is doing real work and is not trivially replaced by a small generic classifier. The learned label is still myopic: it measures single-request net savings, not delayed eviction or future-locality cost, so the memory-bound recovery trace should be read alongside the public-dataset Phase 3 summary rather than inferred from it.
+If MeritKV beats both learned variants, that supports the claim that the hand-derived per-request utility rule is doing real work and is not trivially replaced by a small generic classifier.
 
 If either learned variant wins, that is also a useful result: it identifies where a future learned admission controller can improve the fixed formula.
 

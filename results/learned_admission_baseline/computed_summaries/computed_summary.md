@@ -25,4 +25,3 @@ Completed models: GPT-2, Qwen2.5-1.5B, TinyLlama-1.1B, Gemma-2B. Phi-3 is not in
 - Phi-3 is excluded because it OOMed before producing train traces.
 - MeritKV consistently outperforms the learned policy on speedup across all models (2-3% advantage).
 - The learned policy achieves lower waste by being more conservative (more flips-to-bypass), but this trades off speedup.
-- Memory-bound trace results for these models are in `incoming_p100/memory_bound_trace_4model/`.
