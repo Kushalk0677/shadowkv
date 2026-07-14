@@ -10,7 +10,7 @@ Added:
 - `SemanticKVIndex`
 - `policy_learning.py`
 - `experiments/analyze_shadowkv_results.py`
-- `docs/shadowkv_plus_research_design.md`
+- `docs/meritkv_research_design.md`
 - result-preserving integration with existing benchmark script
 
 Preserved:
