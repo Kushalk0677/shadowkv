@@ -2,7 +2,7 @@
 
 ## 1. Research Question
 
-Does splicing cached key-value (KV) cache from one prompt prefix into another prompt's computation change the generated output? This measures the output fidelity of the ShadowKV++ `_partial_semantic_reuse` mechanism.
+Does splicing cached key-value (KV) cache from one prompt prefix into another prompt's computation change the generated output? This measures the output fidelity of the MeritKV `_partial_semantic_reuse` mechanism.
 
 ## 2. Methodology
 

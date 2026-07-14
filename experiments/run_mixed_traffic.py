@@ -67,7 +67,7 @@ MIXED_WORKLOADS = {
 ENGINES = [
     ('No cache', NoCacheEngine, {}, {}),
     ('MeritKV', ShadowKVPlusEngine, {}, {'allow_approximate_semantic_reuse': False}),
-    ('ShadowKV (no waste)', ShadowKVEngine, {}, {}),
+    ('MeritKV-Sem (no waste)', ShadowKVEngine, {}, {}),
     ('Gate: len>=16', ReactivePrefixCacheEngine, {'min_reuse_prefix_tokens': 16, 'min_store_prefix_tokens': 8}, {}),
     ('Gate: len>=32', ReactivePrefixCacheEngine, {'min_reuse_prefix_tokens': 32, 'min_store_prefix_tokens': 24}, {}),
     ('Gate: len>=48', ReactivePrefixCacheEngine, {'min_reuse_prefix_tokens': 48, 'min_store_prefix_tokens': 40}, {}),
@@ -256,7 +256,7 @@ def main():
     
     for wl_id in workloads:
         row_mk = [r for r in all_results if r['workload']==wl_id and r['engine']=='MeritKV']
-        row_nw = [r for r in all_results if r['workload']==wl_id and r['engine']=='ShadowKV (no waste)']
+        row_nw = [r for r in all_results if r['workload']==wl_id and r['engine']=='MeritKV-Sem (no waste)']
         row_l16 = [r for r in all_results if r['workload']==wl_id and r['engine']=='Gate: len>=16']
         row_st = [r for r in all_results if r['workload']==wl_id and r['engine']=='Gate: strict']
         mk = f"{row_mk[0]['speedup']:.3f} {row_mk[0]['waste']:.3f} {row_mk[0]['hit_rate']:.3f}" if row_mk else "---"

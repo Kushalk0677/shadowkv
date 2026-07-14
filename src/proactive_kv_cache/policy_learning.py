@@ -126,10 +126,10 @@ def learn_shadowkv_plus_thresholds(rows: Iterable[RunFeatureRow]) -> Dict[str, f
     Returned values can be used as controller defaults or as reporting evidence.
     """
 
-    # Learn deployment gates from ShadowKV++ evidence only.  ShadowKV and
-    # ShadowKV++ have different mechanisms and waste profiles; mixing the old
+    # Learn deployment gates from MeritKV evidence only.  MeritKV-Sem and
+    # MeritKV have different mechanisms and waste profiles; mixing the old
     # engine into the training target makes the learned gate look better than it
-    # really is.  If there are not enough ShadowKV++ rows yet, return a
+    # really is.  If there are not enough MeritKV rows yet, return a
     # conservative default and make the insufficiency explicit.
     data = [r for r in rows if r.engine == 'shadow_kv_plus']
     if len(data) < 8:

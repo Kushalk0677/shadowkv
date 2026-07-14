@@ -54,7 +54,7 @@ Two prompt modes: `templated` (shared serving scaffold) and `rag`
 Three engines, compared pairwise on identical request sequences:
 
 1. **`sglang_radix_attention`**: Native SGLang RadixAttention prefix caching.
-2. **`sglang_radix_attention_shadowkv_plus`**: ShadowKV++ policy controller
+2. **`sglang_radix_attention_shadowkv_plus`**: MeritKV policy controller
    as an overlay on SGLang's RadixAttention.
 3. **`lmcache_no_native_radix`**: LMCache without native RadixAttention
    integration (baseline without prefix-tree matching).
@@ -68,7 +68,7 @@ Three engines on Qwen2.5-32B:
 
 1. **`vllm_no_cache`**: vLLM with prefix caching disabled.
 2. **`vllm_apc`**: vLLM with Automatic Prefix Caching (hash-based).
-3. **`vllm_apc_shadowkv_plus`**: ShadowKV++ overlay on vLLM APC.
+3. **`vllm_apc_shadowkv_plus`**: MeritKV overlay on vLLM APC.
 
 vLLM results are single runs. GPU energy measured via NVML.
 
@@ -92,7 +92,7 @@ bundles under `runtime_experiments/`. Each bundle includes:
 
 ## Limitations
 
-- SGLang + ShadowKV++ at 32B is an actual timed measurement, not a value derived from lower-size SGLang ratio trends.
+- SGLang + MeritKV at 32B is an actual timed measurement, not a value derived from lower-size SGLang ratio trends.
 - vLLM 7B and 32B rows are timed measurements; 1.5B, 3B, and 14B rows are scaled from measured anchors.
 - Results on other model families (GPT-2, TinyLlama, Gemma, Phi-3)
   and other GPU types are not yet available.

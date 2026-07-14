@@ -123,7 +123,7 @@ At lambda = 0, the policy matches the base results exactly (sanity check). At th
 
 The coupling penalty is complementary to the memory-breakeven guard. The guard is a **hard constraint** derived from hardware physics: it rejects speculative precomputes shorter than k* because they can never break even. The coupling penalty is a **soft preference** tuned by the operator: it discounts admits where high benefit correlates with high waste, reducing risk without enforcing a hard cutoff.
 
-## 6. Implications for ShadowKV++
+## 6. Implications for MeritKV
 
 1. **Promising architectures**: LLaMA and Gemma models showed strong fidelity in these checks, but approximate partial semantic reuse should still be validated for the deployed model, precision, and backend.
 

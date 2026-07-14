@@ -27,7 +27,7 @@ python literature_accurate_baselines/run_runtime_cache_baseline.py \
   --launch_server
 ```
 
-ShadowKV++ admission-controller variant:
+MeritKV admission-controller variant:
 
 ```bash
 python literature_accurate_baselines/run_runtime_cache_baseline.py \

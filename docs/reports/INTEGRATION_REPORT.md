@@ -1,8 +1,8 @@
-# ShadowKV++ Full Repository Integration Report
+# MeritKV Full Repository Integration Report
 
 ## What changed
 
-This repository now preserves the original benchmark/results structure and adds ShadowKV++ as an integrated experimental engine.
+This repository now preserves the original benchmark/results structure and adds MeritKV as an integrated experimental engine.
 
 Added:
 - `ShadowKVPlusEngine`
@@ -29,7 +29,7 @@ python experiments/run_benchmark.py --backend fake --workload synthetic --varian
 python experiments/analyze_shadowkv_results.py results/
 ```
 
-## ShadowKV++ engine name
+## MeritKV engine name
 
 Use:
 
@@ -63,7 +63,7 @@ Semantic partial reuse is a simulator/research-mode mechanism unless explicitly 
 
 These are smoke/regression numbers only, not publishable latency evidence.
 
-| variant | strict reactive | ShadowKV | ShadowKV++ | ++ bypass plans | ++ net utility |
+| variant | strict reactive | MeritKV-Sem | MeritKV | ++ bypass plans | ++ net utility |
 |---|---:|---:|---:|---:|---:|
 | high_skew | 1.000 | 1.366 | 1.366 | 2 | 543.4 |
 | bursty_high | 1.000 | 1.129 | 1.156 | 5 | 333.3 |
@@ -75,7 +75,7 @@ These are smoke/regression numbers only, not publishable latency evidence.
 | rag_long_context | 2.375 | 1.941 | 2.281 | 1 | 5170.7 |
 | uniform | 1.000 | 0.861 | 1.017 | 10 | 386.6 |
 
-Key observation: ShadowKV++ is now materially better than the old ShadowKV on low/medium reuse fake workloads because the policy bypasses negative-utility behavior. On long structured prefixes, strict reactive can still be stronger, which is honestly documented and should be addressed with real backend-level fine-grained KV reuse if the paper wants to claim superiority over all baselines.
+Key observation: MeritKV is now materially better than the old MeritKV-Sem on low/medium reuse fake workloads because the policy bypasses negative-utility behavior. On long structured prefixes, strict reactive can still be stronger, which is honestly documented and should be addressed with real backend-level fine-grained KV reuse if the paper wants to claim superiority over all baselines.
 
 ## Semantic/paraphrase novelty extension
 
@@ -95,7 +95,7 @@ New metrics emitted by `shadow_kv_plus`:
 - `semantic_blocked_by_backend_total`
 
 Correctness boundary: on real HF backends, approximate semantic KV reuse is not
-executed by default. Instead, ShadowKV++ records the opportunity and blocks unsafe
+executed by default. Instead, MeritKV records the opportunity and blocks unsafe
 approximate reuse. On FakeBackend, semantic partial reuse can execute as an
 ablation.
 

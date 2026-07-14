@@ -40,9 +40,9 @@ This folder is a complete, standalone result package for the Blackwell long-pref
 
 Support directories such as `metadata`, `metadata_2`, and `_logs_2` remain numbered because they preserve source-run metadata and logs.
 
-## ShadowKV++ Aggregate Summary
+## MeritKV Aggregate Summary
 
-These rows are from `model_summary.csv`. They summarize the `shadow_kv_plus` engine for each kept model instance.
+These rows are from `model_summary.csv`. They summarize MeritKV, stored under the stable `shadow_kv_plus` engine ID for each kept model instance.
 
 | Model instance | Model | Mean speedup | P95 speedup | GPU energy reduction | Hit rate | Reuse successes | Waste |
 |---|---|---:|---:|---:|---:|---:|---:|

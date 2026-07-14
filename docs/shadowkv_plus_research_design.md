@@ -1,8 +1,8 @@
-# ShadowKV++ Research Design
+# MeritKV Research Design
 
 ## Positioning
 
-ShadowKV++ reframes ShadowKV from a cache mechanism into a policy-driven inference controller.
+MeritKV reframes MeritKV-Sem from a cache mechanism into a policy-driven inference controller.
 
 The contribution is not "prefix caching exists." The contribution is a serving-time controller that decides:
 
@@ -14,7 +14,7 @@ The contribution is not "prefix caching exists." The contribution is a serving-t
 
 ## Core objective
 
-ShadowKV++ optimizes a net-utility objective:
+MeritKV optimizes a net-utility objective:
 
 ```text
 utility = expected_latency_benefit - expected_reuse_cost - expected_waste
@@ -61,7 +61,7 @@ This means the repo can study the opportunity of semantic approximate reuse with
 
 ### 3. Fine-grained reuse accounting
 
-ShadowKV++ records a logical layer reuse ratio per admitted plan.
+MeritKV records a logical layer reuse ratio per admitted plan.
 
 This is currently a research-control signal and metric. Real tensor-level partial layer KV reuse is intentionally not claimed unless a backend implementation supports it.
 
@@ -69,7 +69,7 @@ This is currently a research-control signal and metric. Real tensor-level partia
 
 Location: `src/proactive_kv_cache/policy_learning.py`
 
-The offline learner parses completed benchmark JSON files and searches conservative deployment thresholds from ShadowKV++ rows only:
+The offline learner parses completed benchmark JSON files and searches conservative deployment thresholds from MeritKV rows only:
 - minimum reuse density,
 - maximum waste ratio,
 - minimum hit rate.
@@ -88,9 +88,9 @@ This makes the policy auditable and reproducible from prior experiment logs.
 - repeated seeds,
 - public datasets,
 - raw + templated modes,
-- no-cache/reactive/strict-reactive/ShadowKV/ShadowKV++ comparisons.
+- no-cache/reactive/strict-reactive/MeritKV-Sem/MeritKV comparisons.
 
-### Publishable ShadowKV++ metrics
+### Publishable MeritKV metrics
 Report at least:
 - speedup vs no cache,
 - speedup vs strict reactive prefix cache,
@@ -104,7 +104,7 @@ Report at least:
 
 ## Main paper claim after integration
 
-> ShadowKV++ is a waste-aware, policy-driven KV reuse controller that combines exact prefix reuse, semantic neighbourhood signals, fine-grained reuse accounting, and offline-learned deployment gates. It improves prefix-rich LLM serving workloads while explicitly avoiding or disabling negative-utility reuse regimes.
+> MeritKV is a waste-aware, policy-driven KV reuse controller that combines exact prefix reuse, semantic neighbourhood signals, fine-grained reuse accounting, and offline-learned deployment gates. It improves prefix-rich LLM serving workloads while explicitly avoiding or disabling negative-utility reuse regimes.
 
 ## Claims not made by this code
 

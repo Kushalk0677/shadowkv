@@ -1,5 +1,5 @@
 """
-Chaos testing framework for ShadowKV++ resilience.
+Chaos testing framework for MeritKV resilience.
 Tests the system's ability to handle failures and edge cases under controlled chaos.
 """
 from __future__ import annotations

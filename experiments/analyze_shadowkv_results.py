@@ -20,7 +20,7 @@ def _mean(xs):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Summarize ShadowKV/ShadowKV++ benchmark JSONs and result zips.')
+    parser = argparse.ArgumentParser(description='Summarize MeritKV-Sem/MeritKV benchmark JSONs and result zips.')
     parser.add_argument('paths', nargs='*', default=[str(ROOT / 'results')])
     parser.add_argument('--csv', default=str(ROOT / 'results' / 'shadowkv_result_summary.csv'))
     parser.add_argument('--markdown', default=str(ROOT / 'results' / 'shadowkv_result_summary.md'))
@@ -36,7 +36,7 @@ def main() -> None:
         grouped[(r.engine, r.prompt_mode)].append(r)
 
     lines = [
-        '# ShadowKV result summary',
+        '# MeritKV-Sem result summary',
         '',
         f'Parsed runs: {len(rows)}',
         '',
@@ -58,7 +58,7 @@ def main() -> None:
         '',
         '## Learned deployment gate',
         '',
-        'The dependency-free learner searches conservative thresholds for enabling ShadowKV++ on future workload families.',
+        'The dependency-free learner searches conservative thresholds for enabling MeritKV on future workload families.',
         '',
         '```json',
         json.dumps(policy, indent=2),
@@ -68,7 +68,7 @@ def main() -> None:
         '',
         '- Treat fake-backend runs as regression/smoke evidence only.',
         '- Treat HF/vLLM repeated seeded runs as performance evidence.',
-        '- ShadowKV++ metrics to report: policy net utility, semantic match rate, semantic partial hits, layer reuse events, and waste ratio.',
+        '- MeritKV metrics to report: policy net utility, semantic match rate, semantic partial hits, layer reuse events, and waste ratio.',
     ])
     Path(args.markdown).write_text('\n'.join(lines) + '\n')
 

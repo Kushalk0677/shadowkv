@@ -14,7 +14,7 @@ Key columns include:
 - `latency_ms`, `token_count`, `matched_prefix_length`, `tokens_recomputed`
 - `was_cache_hit`, `was_speculative_hit`, `cache_tier`
 - cumulative reuse/store/waste counters at the time of the request
-- ShadowKV++ policy fields when available:
+- MeritKV policy fields when available:
   - `policy_strategy`
   - `policy_reusable_prefix_tokens`
   - `policy_expected_benefit_ms`

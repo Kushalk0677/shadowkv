@@ -1,5 +1,5 @@
 """
-EXPERIMENTAL backend adapter system for ShadowKV++.
+EXPERIMENTAL backend adapter system for MeritKV.
 
 This module defines a clean separation between backend-specific logic
 and the core caching engine, with adapters for HuggingFace, FakeBackend,

@@ -39,7 +39,7 @@ MeritKV combines three cooperating components:
 
 The controlled HuggingFace results cover 5 models, 10 datasets, 3 prompt modes, and 3 seeds (`42`, `123`, `456`) on T4 and P100 GPUs. The aggregate CSVs live under `results/controlled_results/`.
 
-Baselines include no-cache, reactive prefix caching, greedy prefix caching, strict reactive prefix caching, frequency speculation, ShadowKV, and MeritKV.
+Baselines include no-cache, reactive prefix caching, greedy prefix caching, strict reactive prefix caching, frequency speculation, MeritKV-Sem (`shadow_kv`), and MeritKV (`shadow_kv_plus`).
 
 | Engine | Mean Speedup | Waste | Hit Rate |
 |--------|:-----------:|:-----:|:--------:|
@@ -48,10 +48,10 @@ Baselines include no-cache, reactive prefix caching, greedy prefix caching, stri
 | Greedy | 1.221x | 0.000 | 0.320 |
 | Strict reactive | 1.254x | 0.000 | 0.310 |
 | Frequency spec. | 1.208x | 0.284 | 0.617 |
-| ShadowKV | 1.287x | 0.264 | 0.606 |
+| MeritKV-Sem | 1.287x | 0.264 | 0.606 |
 | **MeritKV** | **1.365x** | **0.156** | **0.402** |
 
-The headline result is not just higher hit rate. MeritKV improves latency while reducing wasted speculative work relative to ShadowKV.
+The headline result is not just higher hit rate. MeritKV improves latency while reducing wasted speculative work relative to MeritKV-Sem.
 
 ### Runtime Evaluation
 
@@ -82,7 +82,7 @@ Fidelity examples live in `results/fidelity_examples/`. These files are diagnost
 
 ```text
 src/proactive_kv_cache/        Core engines, cache bank, controller, models
-  engines.py                   BaseEngine, NoCacheEngine, ShadowKVPlusEngine
+  engines.py                   BaseEngine, NoCacheEngine, ShadowKVPlusEngine (internal MeritKV class)
   cache.py                     TieredStateBank with radix trie
   controller.py                AdaptiveReuseController, utility scoring
   policy.py                    CostAwareSlackPolicy

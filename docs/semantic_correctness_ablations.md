@@ -1,6 +1,6 @@
 # Semantic Correctness Ablations
 
-ShadowKV++ now exposes three semantic-reuse ablation engines. They are intentionally separate from the default safe `shadow_kv_plus` engine so the paper can distinguish detected semantic opportunity from actually executed approximate KV reuse.
+MeritKV now exposes three semantic-reuse ablation engines. They are intentionally separate from the default safe `shadow_kv_plus` engine so the paper can distinguish detected semantic opportunity from actually executed approximate KV reuse.
 
 ## Engines
 

@@ -919,7 +919,7 @@ class RuntimeNativeCacheEngine(NativePrefixCachingEngine):
 
 
 class AdmissionControlledRuntimeCacheEngine(RuntimeNativeCacheEngine):
-    """Native runtime cache baseline gated by the ShadowKV++ admission policy."""
+    """Native runtime cache baseline gated by the MeritKV admission policy."""
 
     def __init__(
         self,
@@ -1721,7 +1721,7 @@ class ShadowKVEngine(ReactivePrefixCacheEngine):
 
 
 class ShadowKVPlusEngine(ShadowKVEngine):
-    """ShadowKV++: policy-driven, semantic, fine-grained KV reuse.
+    """MeritKV: policy-driven, semantic, fine-grained KV reuse.
 
     Real backends only reuse exact-prefix KV for correctness. Semantic retrieval
     drives the controller and can simulate approximate partial reuse on the
@@ -1753,7 +1753,7 @@ class ShadowKVPlusEngine(ShadowKVEngine):
         self.fast_raw_bypass_min_requests = 8
         self.fast_raw_bypass_density_threshold = 0.04
         self.fast_raw_bypass_success_threshold = 1
-        # Raw prompts are the danger zone. Main ShadowKV++ now starts in a
+        # Raw prompts are the danger zone. Main MeritKV now starts in a
         # strict no-store/no-spec gate and graduates only when long, repeated
         # prefixes show positive expected utility. The previous best-latency
         # fastpath is preserved as shadow_kv_plus_best_latency, and a raw
@@ -1995,13 +1995,13 @@ class ShadowKVPlusEngine(ShadowKVEngine):
         return plan, semantic_key
 
     def _should_defer_reactive_store(self, tokens: Tuple[int, ...], prefix_len: int, metadata: Dict | None = None) -> bool:
-        # For raw, low-reuse workloads, ShadowKV++ should not pay repeated
+        # For raw, low-reuse workloads, MeritKV should not pay repeated
         # prefill/store overhead once early evidence says reuse density is low.
         # This is deliberately scoped to raw mode so templated/semantic scaffolds
         # still get aggressive cold-start materialization.
         if self._is_raw_fast_bypass_active(metadata):
             return True
-        # ShadowKV++ front-loads long, explicit scaffolds because the controller
+        # MeritKV front-loads long, explicit scaffolds because the controller
         # has high confidence they will be reused; this fixes the cold-start
         # weakness of idle-only speculation on templated serving workloads.
         hint = self._shared_prefix_hint(tokens, metadata)
@@ -2105,7 +2105,7 @@ class ShadowKVPlusEngine(ShadowKVEngine):
     def _slice_prefill_kv_to_prefix(self, past_key_values, prefix_len: int):
         """Extract a prefix KV from an already-computed full-request KV.
 
-        ShadowKV++ used to recompute the scaffold solely to store it, paying a
+        MeritKV used to recompute the scaffold solely to store it, paying a
         second prefill on the cold request.  A real serving stack already has
         the full request KV after prefill, so the policy layer should retain the
         prefix slice opportunistically instead of materializing it with another
@@ -2355,7 +2355,7 @@ class ShadowKVPlusEngine(ShadowKVEngine):
         which caused weak raw datasets to pay cache/store overhead. This gate is
         intentionally harder to pass: it requires a minimum warm-up, a long
         repeated prefix, sufficient observation support, and a positive estimated
-        utility margin before raw requests can use ShadowKV++ cache paths.
+        utility margin before raw requests can use MeritKV cache paths.
         """
         if not self._is_raw_prompt(metadata):
             return True
@@ -2514,16 +2514,16 @@ class ShadowKVPlusEngine(ShadowKVEngine):
 
 
 class ShadowKVPlusLiteEngine(ShadowKVPlusEngine):
-    """ShadowKV++ Lite: low-overhead exact-prefix serving path.
+    """MeritKV Lite: low-overhead exact-prefix serving path.
 
-    This Phase 1 variant is intentionally narrower than full ShadowKV++:
+    This Phase 1 variant is intentionally narrower than full MeritKV:
     - exact KV prefix reuse only;
     - no semantic retrieval in the latency path;
     - no background speculative worker;
     - no rich controller planning for obvious exact/scaffold hits;
     - break-even minimum-prefix admission before reuse.
 
-    It is the latency-first serving baseline. Full ShadowKV++ remains the
+    It is the latency-first serving baseline. Full MeritKV remains the
     research/control-plane variant for semantic opportunity and policy traces.
     """
 
@@ -2612,7 +2612,7 @@ class ShadowKVPlusLiteEngine(ShadowKVPlusEngine):
         tier: str = 'cpu',
         metric_name: str | None = None,
     ) -> float:
-        # Copy of the full ShadowKV++ helper, without semantic-index mutation.
+        # Copy of the full MeritKV helper, without semantic-index mutation.
         prefix_len = min(max(int(prefix_len), 0), len(tokens), self.tuning.max_cacheable_prefix_tokens)
         if prefix_len < self.bank.min_match_length:
             self.engine_metrics['store_skips'] = int(self.engine_metrics.get('store_skips', 0)) + 1
@@ -2816,7 +2816,7 @@ def summarize_engine(engine: BaseEngine) -> Dict:
     ).to_dict()
     # Preserve experimental controller metrics without forcing every metric into
     # the stable RunSummary dataclass. This keeps older reports compatible while
-    # making ShadowKV++ diagnostics visible in JSON outputs.
+    # making MeritKV diagnostics visible in JSON outputs.
     for key, value in engine.engine_metrics.items():
         summary.setdefault(key, value)
     if hasattr(engine, 'utility_estimator'):

@@ -4,7 +4,7 @@ This document describes how the repository treats semantic KV reuse. The short v
 
 ## Claim Boundary
 
-ShadowKV++ makes two separate claims:
+MeritKV makes two separate claims:
 
 1. It can identify and score semantic reuse opportunities that exact-prefix caches miss.
 2. It can explicitly bypass or block approximate reuse when the request-level utility or correctness boundary is not good enough.
@@ -48,7 +48,7 @@ The float16 examples show model-dependent behavior. TinyLlama and Gemma-style mo
 
 Use this language in the paper and README:
 
-- ShadowKV++ detects semantic opportunities that exact-prefix caching misses.
+- MeritKV detects semantic opportunities that exact-prefix caching misses.
 - The controller scores whether reuse is useful for the current request.
 - The system can bypass low-utility reuse.
 - On real backends, unsafe approximate semantic KV reuse is blocked by default unless a guarded or ablation path is explicitly enabled.

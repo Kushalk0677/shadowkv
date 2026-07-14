@@ -503,7 +503,7 @@ def build_lmcache_command(args: argparse.Namespace) -> tuple[List[str], Dict[str
 
 
 class ExternalAdmissionController:
-    """Conservative ShadowKV++ admission wrapper for external runtimes.
+    """Conservative MeritKV admission wrapper for external runtimes.
 
     External runtimes own their KV cache internals. To keep this literature
     adapter honest, controller-denied requests are enforced by resetting the

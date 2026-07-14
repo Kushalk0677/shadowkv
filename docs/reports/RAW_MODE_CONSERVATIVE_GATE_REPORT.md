@@ -1,15 +1,15 @@
 # Raw-Mode Conservative Gate Patch
 
-This patch makes ShadowKV++ more conservative on raw prompt workloads.
+This patch makes MeritKV more conservative on raw prompt workloads.
 
 ## Problem
 Raw workloads often do not contain stable reusable scaffolds. The previous fastpath activated only after observing low reuse density, meaning early raw requests could still pay policy/store/speculation overhead before the system learned that reuse was weak.
 
 ## Change
-ShadowKV++ now starts raw mode in a no-store/no-spec conservative path. It observes prefix frequencies cheaply using the existing query observation bank and graduates into normal cache planning only when there is strong evidence of repeated prefixes.
+MeritKV now starts raw mode in a no-store/no-spec conservative path. It observes prefix frequencies cheaply using the existing query observation bank and graduates into normal cache planning only when there is strong evidence of repeated prefixes.
 
 ## New behavior
-For `prompt_mode=raw` and safe ShadowKV++ mode:
+For `prompt_mode=raw` and safe MeritKV mode:
 
 1. Observe the request prefix statistics.
 2. If no repeated-prefix evidence is strong enough:
@@ -19,7 +19,7 @@ For `prompt_mode=raw` and safe ShadowKV++ mode:
    - push speculation into cooldown,
    - record a fast bypass.
 3. If repeated-prefix evidence becomes strong:
-   - normal ShadowKV++ exact reuse planning is allowed.
+   - normal MeritKV exact reuse planning is allowed.
 
 ## New metrics
 

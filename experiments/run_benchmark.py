@@ -16,6 +16,7 @@ import time
 
 from proactive_kv_cache.datasets import list_datasets, list_prompt_modes
 from proactive_kv_cache.energy import NvidiaEnergyMeter, measure_idle_baseline
+from proactive_kv_cache.engine_names import display_engine_name
 from proactive_kv_cache.engines import (
     AdmissionControlledRuntimeCacheEngine,
     FrequencySpeculativeEngine,
@@ -193,7 +194,7 @@ def _profile_shadowkv_costs(backend) -> dict:
             try:
                 backend.prefill(warmup_tokens)
             except Exception as exc:
-                raise RuntimeError('ShadowKV calibration warmup failed before benchmarking') from exc
+                raise RuntimeError('MeritKV-Sem calibration warmup failed before benchmarking') from exc
     for length in candidate_lengths:
         sample = tuple(tokens[:length])
         if len(sample) < length:
@@ -695,22 +696,22 @@ def main() -> None:
     parser.add_argument('--include_experimental', action='store_true')
     parser.add_argument('--engines', nargs='+', choices=ALL_ENGINE_NAMES, help='Run only the specified engines, in the given order.')
     parser.add_argument('--include_runtime_baselines', action='store_true', help='Add in-process literature-accurate vLLM APC variants when --backend vllm. Use literature_accurate_baselines/run_runtime_cache_baseline.py for SGLang and LMCache.')
-    parser.add_argument('--include_semantic_ablations', action='store_true', help='Add scaffold-only, early-layer, and logit-guarded ShadowKV++ ablation engines.')
-    parser.add_argument('--policy_preset', choices=POLICY_PRESETS, default='balanced', help='Fixed ShadowKV/ShadowKV++ policy preset used for the measured run.')
-    parser.add_argument('--enable_policy_tuning', action='store_true', help='Run a short unmeasured ShadowKV++ preset calibration before the measured run.')
+    parser.add_argument('--include_semantic_ablations', action='store_true', help='Add scaffold-only, early-layer, and logit-guarded MeritKV ablation engines.')
+    parser.add_argument('--policy_preset', choices=POLICY_PRESETS, default='balanced', help='Fixed MeritKV-Sem/MeritKV policy preset used for the measured run.')
+    parser.add_argument('--enable_policy_tuning', action='store_true', help='Run a short unmeasured MeritKV preset calibration before the measured run.')
     parser.add_argument('--policy_tuning_requests', type=int, default=24, help='Number of leading requests used for unmeasured preset calibration.')
     parser.add_argument('--policy_tuning_presets', nargs='+', choices=POLICY_PRESETS, default=DEFAULT_POLICY_TUNING_PRESETS, help='Candidate presets for --enable_policy_tuning.')
     parser.add_argument('--policy_tuning_metric', choices=['mean_latency_ms', 'p95_latency_ms', 'utility_adjusted_latency'], default='utility_adjusted_latency', help='Metric minimized during preset calibration.')
     parser.add_argument('--enable_policy_trace', action='store_true', help='Write per-request policy_trace.jsonl. Disabled by default for performance benchmarking.')
     parser.add_argument('--enable_decision_log', action='store_true', help='Write structured per-request policy decisions as JSONL.')
-    parser.add_argument('--config_path', default=None, help='Path to the versioned ShadowKV policy config.')
+    parser.add_argument('--config_path', default=None, help='Path to the versioned MeritKV policy config.')
     parser.add_argument('--semantic_index_diagnostics', action='store_true', help='Write semantic index diagnostic JSON for each semantic-capable engine.')
     parser.add_argument('--allow_unsafe_semantic_kv_reuse', action='store_true', help='Allow unguarded approximate semantic KV reuse. Intended only for fake/controlled ablations.')
     parser.add_argument('--early_layer_reuse_ratio', type=float, default=0.35, help='Fraction of semantic KV prefix reused in early-layer ablation.')
     parser.add_argument('--logit_guard_threshold', type=float, default=0.08, help='Maximum TV distance for logit-guard semantic reuse.')
-    parser.add_argument('--min_reuse_prefix_tokens', type=int, default=None, help='Override ShadowKV++ Lite break-even reuse prefix threshold. Defaults are backend/device-aware.')
-    parser.add_argument('--disable_utility_admission', action='store_true', help='Disable Phase 3 online utility-aware admission for ShadowKV++ Lite.')
-    parser.add_argument('--utility_min_net_saved_ms', type=float, default=None, help='Minimum estimated net utility required for ShadowKV++ Lite reuse. Defaults to config policy.lite.utility_min_net_saved_ms.')
+    parser.add_argument('--min_reuse_prefix_tokens', type=int, default=None, help='Override MeritKV Lite break-even reuse prefix threshold. Defaults are backend/device-aware.')
+    parser.add_argument('--disable_utility_admission', action='store_true', help='Disable Phase 3 online utility-aware admission for MeritKV Lite.')
+    parser.add_argument('--utility_min_net_saved_ms', type=float, default=None, help='Minimum estimated net utility required for MeritKV Lite reuse. Defaults to config policy.lite.utility_min_net_saved_ms.')
     parser.add_argument('--measure_energy', action='store_true', help='Measure GPU energy per engine using NVML total-energy deltas when available.')
     parser.add_argument('--gpu_index', type=int, default=0, help='GPU index used by NVML/nvidia-smi energy measurement.')
     parser.add_argument('--idle_baseline_seconds', type=float, default=0.0, help='Optional idle-energy baseline duration measured before engine runs. Use 5-30 seconds for paper runs.')
@@ -838,6 +839,14 @@ def main() -> None:
                 engine_summary['energy_reduction_vs_no_cache_pct'] = 100.0 * (float(baseline_j) - float(engine_summary['gpu_joules_per_request'])) / max(float(baseline_j), 1e-9)
             if baseline_idle_j is not None and engine_summary.get('idle_adjusted_joules_per_request') is not None:
                 engine_summary['idle_adjusted_energy_reduction_vs_no_cache_pct'] = 100.0 * (float(baseline_idle_j) - float(engine_summary['idle_adjusted_joules_per_request'])) / max(float(baseline_idle_j), 1e-9)
+    engine_summary_keys = [
+        engine_key for engine_key, engine_summary in summary.items()
+        if isinstance(engine_summary, dict) and 'mean_latency_ms' in engine_summary
+    ]
+    summary['engine_display_names'] = {
+        engine_key: display_engine_name(engine_key)
+        for engine_key in engine_summary_keys
+    }
     summary['config'] = {key: value for key, value in vars(args).items() if not key.startswith('_')}
     summary['config']['resolved_model'] = resolve_model(args.model)
     summary['config']['config_version'] = CONFIG.version
@@ -875,7 +884,7 @@ def main() -> None:
     if args.measure_energy or args.energy_output_csv:
         csv_path = Path(args.energy_output_csv) if args.energy_output_csv else output_dir / f'{out_file.stem}_engine_summary.csv'
         csv_fields = [
-            'engine', 'mean_latency_ms', 'p95_latency_ms', 'speedup_vs_no_cache_mean', 'speedup_vs_no_cache_p95',
+            'engine', 'engine_display_name', 'mean_latency_ms', 'p95_latency_ms', 'speedup_vs_no_cache_mean', 'speedup_vs_no_cache_p95',
             'hit_rate', 'gpu_energy_j', 'idle_adjusted_gpu_energy_j', 'gpu_joules_per_request',
             'idle_adjusted_joules_per_request', 'gpu_joules_per_total_token', 'energy_reduction_vs_no_cache_pct',
             'idle_adjusted_energy_reduction_vs_no_cache_pct', 'energy_source', 'idle_baseline_power_w',
@@ -891,9 +900,9 @@ def main() -> None:
             for engine_key, engine_summary in summary.items():
                 if not isinstance(engine_summary, dict) or 'mean_latency_ms' not in engine_summary:
                     continue
-                row = {'engine': engine_key}
+                row = {'engine': engine_key, 'engine_display_name': display_engine_name(engine_key)}
                 for field in csv_fields:
-                    if field == 'engine':
+                    if field in {'engine', 'engine_display_name'}:
                         continue
                     row[field] = engine_summary.get(field)
                 writer.writerow(row)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-"""Run the ShadowKV++ semantic/paraphrase novelty benchmark.
+"""Run the MeritKV semantic/paraphrase novelty benchmark.
 
-This script isolates the claim that ShadowKV++ can detect semantically-equivalent
+This script isolates the claim that MeritKV can detect semantically-equivalent
 serving scaffolds even when exact prefix strings differ. Exact prefix caches should
-have limited benefit in this mode; ShadowKV++ records semantic opportunity metrics
+have limited benefit in this mode; MeritKV records semantic opportunity metrics
 and, on FakeBackend, can execute approximate partial reuse for controlled ablation.
 """
 

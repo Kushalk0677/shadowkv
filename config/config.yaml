@@ -1,4 +1,4 @@
-version: shadowkv-policy-v1
+version: meritkv-policy-v1
 profile_id: default-unprofiled
 hardware:
   beta_prefill_ms_per_token: 0.6

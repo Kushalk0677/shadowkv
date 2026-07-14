@@ -2,7 +2,7 @@
 
 ## Architecture
 
-ShadowKV++ comprises five components that work together per-request:
+MeritKV comprises five components that work together per-request:
 
 ```
 Request x
@@ -145,4 +145,4 @@ Seven parameters are calibrated from hardware measurements, not guessed:
 
 ## Offline Policy Learner
 
-After benchmark runs, the learner grid-searches threshold triples (rho_min, w_max, h_min) predicting (speedup > 1.02) AND (W < 0.35) from ShadowKV++ rows only. Output is a JSON artifact loadable as controller defaults.
+After benchmark runs, the learner grid-searches threshold triples (rho_min, w_max, h_min) predicting (speedup > 1.02) AND (W < 0.35) from MeritKV rows only. Output is a JSON artifact loadable as controller defaults.

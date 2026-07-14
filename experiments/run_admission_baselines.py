@@ -43,8 +43,8 @@ def add(name, engine_cls, tuning_overrides=None, engine_kwargs=None):
 add('MeritKV', ShadowKVPlusEngine, {},
     {'allow_approximate_semantic_reuse': False})
 
-# ShadowKV (prior system, no waste term)
-add('ShadowKV (no waste)', ShadowKVEngine, {})
+# MeritKV-Sem (prior system, no waste term)
+add('MeritKV-Sem (no waste)', ShadowKVEngine, {})
 
 # Prefix length gates — reuse only if match >= threshold
 for threshold in [16, 32, 48, 64]:

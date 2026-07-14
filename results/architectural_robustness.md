@@ -1,13 +1,13 @@
-﻿# Architectural Robustness: Dual-Validation Methodology
+# Architectural Robustness: Dual-Validation Methodology
 
 ## Overview
 
-ShadowKV++ is evaluated under two complementary regimes. The point is not to present a single best-case number, but to show how the same cache-reuse policy behaves under both controlled research conditions and more realistic execution boundaries.
+MeritKV is evaluated under two complementary regimes. The point is not to present a single best-case number, but to show how the same cache-reuse policy behaves under both controlled research conditions and more realistic execution boundaries.
 
 | Regime | Conditions | Purpose |
 |---|---|---|
 | Controlled | Dedicated benchmark runs with the full multi-engine harness and aggregated T4/P100 outputs | Reproducible academic baseline and ceiling-style comparison |
-| Realistic | Process-isolated result files for deployment-style no-cache versus ShadowKV++ checks | Practical sanity check under cleaner per-engine process boundaries |
+| Realistic | Process-isolated result files for deployment-style no-cache versus MeritKV checks | Practical sanity check under cleaner per-engine process boundaries |
 
 The core architecture is the same in both regimes. What changes is the execution infrastructure around the engines.
 

@@ -45,7 +45,7 @@ class Backend:
     def logit_guard_distance(self, prefix_a: Sequence[int], prefix_b: Sequence[int], top_k: int = 32) -> float | None:
         """Return a small distance when two prefixes induce similar next-token logits.
 
-        Backends that cannot expose logits return ``None``. ShadowKV++ uses this
+        Backends that cannot expose logits return ``None``. MeritKV uses this
         for the guarded semantic-reuse ablation rather than the default safe path.
         """
         return None

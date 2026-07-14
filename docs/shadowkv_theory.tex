@@ -6,7 +6,7 @@
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
 
-\title{Implementation Notes on the ShadowKV Admission Policy}
+\title{Implementation Notes on the MeritKV-Sem Admission Policy}
 \author{}
 \date{}
 
@@ -15,7 +15,7 @@
 
 \section{Purpose}
 
-This note documents the \emph{implemented} ShadowKV admission policy used in the
+This note documents the \emph{implemented} MeritKV-Sem admission policy used in the
 current prototype. The code is no longer a pure frequency thresholding scheme:
 it combines a cost-aware admission rule, a short-horizon reuse forecast, and a
 controller that decides when idle-time speculation should pause or reopen.
@@ -98,7 +98,7 @@ Then the expected number of future reuses is approximated as
 clipped to remain within a bounded multiple of $N_H$.
 \end{definition}
 
-This short-horizon reuse model is what lets ShadowKV speculate more aggressively
+This short-horizon reuse model is what lets MeritKV-Sem speculate more aggressively
 when recent traffic is clustered and prefix reuse appears imminent.
 
 \section{Expected Benefit}
@@ -186,7 +186,7 @@ continuation pattern is already well supported.
 
 \section{Controller Layer}
 
-Admission alone is not the whole story. ShadowKV also has a controller that decides
+Admission alone is not the whole story. MeritKV-Sem also has a controller that decides
 whether idle-time speculation should run at all.
 
 \begin{definition}[Recent reuse density]
@@ -221,7 +221,7 @@ because reuse density is diluted by long prompts.
 \section{Scaffold-Aware Tuning}
 
 For scaffolded prompt modes such as templated public-dataset prompts (and similarly
-for retrieval-augmented prompts), the benchmark harness now relaxes ShadowKV's
+for retrieval-augmented prompts), the benchmark harness now relaxes MeritKV-Sem's
 admission thresholds:
 
 \begin{itemize}
@@ -242,7 +242,7 @@ density is small relative to the full request length.
 The present codebase reflects two empirical lessons from the recent benchmark work:
 
 \begin{enumerate}
-    \item On short and medium templated workloads, ShadowKV can outperform simpler
+    \item On short and medium templated workloads, MeritKV-Sem can outperform simpler
     reactive and greedy baselines when its calibrated benefit model identifies
     profitable speculative prefixes.
 
@@ -265,7 +265,7 @@ This is precisely the failure mode addressed by the current implementation updat
 
 \section{Summary}
 
-The implemented ShadowKV policy is best viewed as a layered decision process:
+The implemented MeritKV-Sem policy is best viewed as a layered decision process:
 \begin{enumerate}
     \item estimate reuse probability from frequency, recency, streaks, and confidence;
     \item forecast short-horizon future reuse volume;

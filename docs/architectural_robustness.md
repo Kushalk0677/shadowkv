@@ -1,11 +1,11 @@
 # Architectural Robustness: Controlled and Realistic Validation
 
-ShadowKV++ is evaluated under two complementary result regimes. The purpose is not to present one best-case number, but to show how the same per-request utility controller behaves under controlled benchmark conditions and under cleaner deployment-style process boundaries.
+MeritKV is evaluated under two complementary result regimes. The purpose is not to present one best-case number, but to show how the same per-request utility controller behaves under controlled benchmark conditions and under cleaner deployment-style process boundaries.
 
 | Regime | Files | Purpose |
 |--------|-------|---------|
 | Controlled | `results/controlled_results/` | Main academic comparison across engines, models, datasets, prompt modes, and seeds |
-| Realistic | `results/realistic_results/` | Process-isolated no-cache versus ShadowKV++ traces for deployment sanity checks |
+| Realistic | `results/realistic_results/` | Process-isolated no-cache versus MeritKV traces for deployment sanity checks |
 
 ## Architecture Invariants
 
@@ -67,7 +67,7 @@ Controlled results answer the research question: does per-request utility admiss
 
 Realistic results answer the deployment question: does the same policy avoid obvious negative-utility behavior when measured with cleaner process boundaries and a direct no-cache comparison?
 
-Together, they support a more honest claim: ShadowKV++ improves reuse decisions by admitting only requests with positive expected utility, while exposing cases where bypass is better than reuse.
+Together, they support a more honest claim: MeritKV improves reuse decisions by admitting only requests with positive expected utility, while exposing cases where bypass is better than reuse.
 
 ## Interpretation Rules
 

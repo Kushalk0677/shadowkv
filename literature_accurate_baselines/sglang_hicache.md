@@ -26,7 +26,7 @@ Minimum implementation bar:
 - runtime-consistent promotion / demotion and eviction
 
 What not to call literature-accurate:
-- a ShadowKV variant with faster promotion
+- a MeritKV-Sem variant with faster promotion
 - any heuristic that only mimics a two-tier cache idea inside this harness
 - a GPU+CPU cache with no L3 or no runtime-consistent prefetch / write-back
 

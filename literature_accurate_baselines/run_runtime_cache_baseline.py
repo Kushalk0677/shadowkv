@@ -208,7 +208,7 @@ def main() -> None:
         "--admission_mode",
         choices=["strict_no_write", "write_through_admission"],
         default="write_through_admission",
-        help="How ShadowKV++ admission enforces bypasses for external runtime caches.",
+        help="How MeritKV admission enforces bypasses for external runtime caches.",
     )
     parser.add_argument("--admission_preset", choices=ADMISSION_PRESETS, default="balanced", help="Fixed external admission preset used for the measured run.")
     parser.add_argument("--enable_admission_tuning", action="store_true", help="Run a short unmeasured preset calibration before the measured runtime run.")

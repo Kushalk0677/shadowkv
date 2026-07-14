@@ -1,9 +1,9 @@
-# Semantic/paraphrase workload for ShadowKV++ novelty
+# Semantic/paraphrase workload for MeritKV novelty
 
 ## Why this workload exists
 
 Raw prompts test safety. Templated prompts test exact structural reuse. Neither
-fully demonstrates the new ShadowKV++ thesis: an inference controller should be
+fully demonstrates the new MeritKV thesis: an inference controller should be
 able to identify semantically equivalent request families even when the surface
 prefix is not identical.
 
@@ -17,7 +17,7 @@ scaffolds such as:
 - `Task: choose the strongest topic...`
 
 These prompts express the same serving operation but do not share an exact token
-prefix. This makes the workload a direct test of whether ShadowKV++ provides
+prefix. This makes the workload a direct test of whether MeritKV provides
 value beyond ordinary prefix caching.
 
 ## How it is implemented
@@ -42,7 +42,7 @@ reproducible without adding a sentence-transformer dependency to the hot path.
 
 ## Correctness boundary
 
-For real HF/vLLM-style backends, ShadowKV++ does **not** blindly reuse approximate
+For real HF/vLLM-style backends, MeritKV does **not** blindly reuse approximate
 semantic KV tensors because that could change model semantics. Instead, it records
 semantic opportunity metrics:
 
@@ -62,7 +62,7 @@ This gives two separate claims:
 
 Do not claim that semantic KV reuse is production-safe yet. The correct claim is:
 
-> ShadowKV++ identifies semantic reuse opportunities that exact-prefix caches miss,
+> MeritKV identifies semantic reuse opportunities that exact-prefix caches miss,
 > and exposes a correctness-aware boundary between safe exact reuse and approximate
 > semantic reuse opportunities.
 
@@ -99,7 +99,7 @@ python experiments/run_benchmark.py \
 Compare `semantic` mode against `raw` and `templated`:
 
 - Exact prefix baselines should not dominate simply from repeated identical scaffolds.
-- ShadowKV++ should report non-zero semantic opportunity metrics.
+- MeritKV should report non-zero semantic opportunity metrics.
 - If `semantic_blocked_by_backend_total` is non-zero, that is expected on HF; it means
   the controller found semantic opportunity but avoided unsafe approximate KV reuse.
 - On FakeBackend, `semantic_partial_hits` can be non-zero for the ablation.

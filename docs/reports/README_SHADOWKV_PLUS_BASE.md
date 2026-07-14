@@ -1,4 +1,4 @@
-# ShadowKV: Tiered Prefix Caching for LLM Serving
+# MeritKV-Sem: Tiered Prefix Caching for LLM Serving
 
 Research code for testing adaptive prefix reuse in LLM serving. The repository includes CPU-friendly baselines, public dataset loaders, benchmark scripts, and basic diagnostics.
 
@@ -118,9 +118,9 @@ python experiments/run_benchmark.py \
   --output_dir results/
 ```
 
-## ShadowKV++ rewrite
+## MeritKV rewrite
 
-This repo now includes `shadow_kv_plus`, a new experimental engine that reframes ShadowKV as a policy-driven inference controller rather than a cache mechanism.
+This repo now includes `shadow_kv_plus`, a new experimental engine that reframes MeritKV-Sem as a policy-driven inference controller rather than a cache mechanism.
 
 ### What changed
 
@@ -147,4 +147,4 @@ PYTHONPATH=src python experiments/run_benchmark.py \
 
 ### Correctness note
 
-For Hugging Face/vLLM-style real backends, ShadowKV++ only admits real KV reuse on exact-prefix matches. Semantic retrieval is used for policy and research diagnostics unless the backend is the simulator. This avoids silently reusing invalid KV states for semantically similar but token-different prompts.
+For Hugging Face/vLLM-style real backends, MeritKV only admits real KV reuse on exact-prefix matches. Semantic retrieval is used for policy and research diagnostics unless the backend is the simulator. This avoids silently reusing invalid KV states for semantically similar but token-different prompts.

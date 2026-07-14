@@ -6,7 +6,7 @@ This patch replaces the failed short-prefix raw conservative gate with a stricte
 
 ### `shadow_kv_plus` — main method, strict raw utility gate
 
-Raw prompts now start in no-store/no-speculation mode. ShadowKV++ only graduates into reuse if all of the following hold:
+Raw prompts now start in no-store/no-speculation mode. MeritKV only graduates into reuse if all of the following hold:
 
 - at least 12 raw requests have been observed,
 - a repeated prefix is at least 48 tokens,

@@ -37,9 +37,9 @@ python experiments/run_p100_isolated_sweep.py
 
 ---
 
-## 2. MeritKV versus Cost-Only and ShadowKV Admission
+## 2. MeritKV versus Cost-Only and MeritKV-Sem Admission
 
-**Paper claim:** MeritKV's full utility objective U = B − C − W outperforms ShadowKV (no waste term) by 5.7% and a pure cost-only gate (B − C) by 4.0%, with 1.5–1.7× less waste.
+**Paper claim:** MeritKV's full utility objective U = B − C − W outperforms MeritKV-Sem (no waste term) by 5.7% and a pure cost-only gate (B − C) by 4.0%, with 1.5–1.7× less waste.
 
 **Table:** Admission baseline comparison table
 
@@ -52,7 +52,7 @@ python experiments/run_p100_isolated_sweep.py
 | Baseline | Speedup | Waste | vs MeritKV |
 |----------|:-------:|:-----:|:----------:|
 | Gate: cost-only (B−C) | 1.310× | 0.230 | −4.0% |
-| ShadowKV (no waste) | 1.287× | 0.264 | −5.7% |
+| MeritKV-Sem (no waste) | 1.287× | 0.264 | −5.7% |
 | **MeritKV** | **1.365×** | **0.156** | — |
 | Offline oracle | 1.407× | 0.000 | +3.1% |
 
@@ -148,7 +148,7 @@ python experiments/run_memory_bound_trace.py \
 
 **Winners by workload:**
 
-| Workload | MeritKV | Greedy | ShadowKV |
+| Workload | MeritKV | Greedy | MeritKV-Sem |
 |----------|:-------:|:------:|:--------:|
 | Clean reusable | **1.42×** / 0.11 | 1.34× / 0.28 | 1.28× / 0.24 |
 | Chat-RAG mix | **1.34×** / 0.14 | 1.40× / 0.30 | 1.30× / 0.26 |
@@ -456,7 +456,7 @@ python experiments/run_blackwell_semantic_n128.py
 | Engine | Mean Speedup | 95% CI |
 |--------|:-----------:|:------:|
 | MeritKV | 1.365× | [1.342, 1.388] |
-| ShadowKV | 1.287× | [1.268, 1.306] |
+| MeritKV-Sem | 1.287× | [1.268, 1.306] |
 | Frequency spec. | 1.208× | [1.191, 1.224] |
 
 ---
@@ -466,7 +466,7 @@ python experiments/run_blackwell_semantic_n128.py
 | Claim | CSVs / Tables | Raw JSON logs | Reproduction script |
 |-------|---------------|---------------|---------------------|
 | Headline HF evaluation | `results/controlled_results/summary_by_engine.csv` | `results/controlled_results/t4/`, `p100/` (898 of 900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable) | `run_p100_isolated_sweep.py` |
-| MeritKV versus cost-only / ShadowKV | `results/mixed_traffic/MIXED_TRAFFIC_RESULTS.md` | `results/mixed_traffic/mixed_results.json` | `run_admission_baselines.py` |
+| MeritKV versus cost-only / MeritKV-Sem | `results/mixed_traffic/MIXED_TRAFFIC_RESULTS.md` | `results/mixed_traffic/mixed_results.json` | `run_admission_baselines.py` |
 | Blackwell admission baselines | `results/mixed_traffic/MIXED_TRAFFIC_RESULTS.md` §1.3 | `results/mixed_traffic/mixed_results.json` | `run_admission_baselines.py` |
 | Memory-bound recovery | `results/mixed_traffic/MEMORY_BOUND_RESULTS.md` | `results/memory_bound_trace/trace_results.json` | `run_memory_bound_trace.py` |
 | Mixed-traffic workloads | `results/mixed_traffic/MIXED_TRAFFIC_RESULTS.md` §2 | `results/mixed_traffic/mixed_results.json` | `run_mixed_traffic.py` |
