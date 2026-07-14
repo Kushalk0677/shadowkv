@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "ShadowKV++: Novel Per-Request Utility Decisions for Waste-Aware KV Cache Reuse"
+title: "MeritKV: Novel Per-Request Utility Decisions for Waste-Aware KV Cache Reuse"
 message: "If you use this repository, please cite the project."
 type: software
 authors:
@@ -13,7 +13,7 @@ version: 0.3.0
 license: "MIT"
 repository-code: "https://github.com/Kushalk0677/shadowkv"
 abstract: >
-  ShadowKV++ is a per-request policy controller for KV cache reuse in LLM
+  MeritKV is a per-request policy controller for KV cache reuse in LLM
   serving. Instead of treating reuse as a yes/no prefix-cache decision, it
   scores whether reuse helps the current request. The controller can admit
   reuse, bypass low-utility candidates, account for wasted speculative work,

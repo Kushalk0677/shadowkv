@@ -1,0 +1,24 @@
+/usr/local/lib/python3.12/dist-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+(APIServer pid=464) Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+/usr/local/lib/python3.12/dist-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+(EngineCore pid=538) Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+(EngineCore pid=538) Loading safetensors checkpoint shards:   0% Completed | 0/4 [00:00<?, ?it/s]
+(EngineCore pid=538) Loading safetensors checkpoint shards:  25% Completed | 1/4 [00:01<00:04,  1.65s/it]
+(EngineCore pid=538) Loading safetensors checkpoint shards:  50% Completed | 2/4 [00:03<00:03,  1.73s/it]
+(EngineCore pid=538) Loading safetensors checkpoint shards:  75% Completed | 3/4 [00:05<00:01,  1.77s/it]
+(EngineCore pid=538) Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:07<00:00,  1.78s/it]
+(EngineCore pid=538) Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:07<00:00,  1.76s/it]
+(EngineCore pid=538) 
+(EngineCore pid=538) 2026-07-01 11:48:16,754 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+(EngineCore pid=538) 2026-07-01 11:48:16,758 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+(EngineCore pid=538) Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/51 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   8%|▊         | 4/51 [00:00<00:01, 34.72it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  16%|█▌        | 8/51 [00:00<00:01, 35.05it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  25%|██▌       | 13/51 [00:00<00:00, 38.57it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  35%|███▌      | 18/51 [00:00<00:00, 40.91it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  45%|████▌     | 23/51 [00:00<00:00, 42.15it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  57%|█████▋    | 29/51 [00:00<00:00, 45.02it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  69%|██████▊   | 35/51 [00:00<00:00, 47.46it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  80%|████████  | 41/51 [00:00<00:00, 49.55it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  92%|█████████▏| 47/51 [00:01<00:00, 50.32it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 51/51 [00:01<00:00, 45.35it/s]
+(EngineCore pid=538) Capturing CUDA graphs (decode, FULL):   0%|          | 0/51 [00:00<?, ?it/s]Capturing CUDA graphs (decode, FULL):   8%|▊         | 4/51 [00:00<00:01, 35.71it/s]Capturing CUDA graphs (decode, FULL):  16%|█▌        | 8/51 [00:00<00:01, 34.76it/s]Capturing CUDA graphs (decode, FULL):  25%|██▌       | 13/51 [00:00<00:00, 38.05it/s]Capturing CUDA graphs (decode, FULL):  35%|███▌      | 18/51 [00:00<00:00, 41.58it/s]Capturing CUDA graphs (decode, FULL):  47%|████▋     | 24/51 [00:00<00:00, 45.86it/s]Capturing CUDA graphs (decode, FULL):  59%|█████▉    | 30/51 [00:00<00:00, 49.23it/s]Capturing CUDA graphs (decode, FULL):  71%|███████   | 36/51 [00:00<00:00, 52.15it/s]Capturing CUDA graphs (decode, FULL):  84%|████████▍ | 43/51 [00:00<00:00, 55.35it/s]Capturing CUDA graphs (decode, FULL):  98%|█████████▊| 50/51 [00:00<00:00, 58.56it/s]Capturing CUDA graphs (decode, FULL): 100%|██████████| 51/51 [00:01<00:00, 50.45it/s]
+(APIServer pid=464) INFO:     Started server process [464]
+(APIServer pid=464) INFO:     Waiting for application startup.
+(APIServer pid=464) INFO:     Application startup complete.
+(APIServer pid=464) INFO:     Shutting down
+(APIServer pid=464) INFO:     Waiting for application shutdown.
+(APIServer pid=464) INFO:     Application shutdown complete.
+(APIServer pid=464) INFO:     Finished server process [464]

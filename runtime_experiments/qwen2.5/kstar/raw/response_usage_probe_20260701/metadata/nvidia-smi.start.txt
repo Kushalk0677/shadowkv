@@ -1,0 +1,36 @@
+Wed Jul  1 07:45:59 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.119.02             Driver Version: 580.119.02     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA RTX PRO 6000 Blac...    Off |   00000000:01:00.0  On |                  Off |
+| 32%   45C    P0            117W /  600W |     928MiB /  97887MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            2628      G   ...d2a-xorg-server-21.1.21/bin/X         40MiB |
+|    0   N/A  N/A            8754      G   ...5-kwallet-6.20.0/bin/ksecretd          8MiB |
+|    0   N/A  N/A            8898      G   ...g-kwin-6.5.5/bin/kwin_wayland        122MiB |
+|    0   N/A  N/A            9014      G   ...urrent-system/sw/bin/Xwayland         13MiB |
+|    0   N/A  N/A            9041      G   ...workspace-6.5.5/bin/ksmserver          8MiB |
+|    0   N/A  N/A            9043      G   ...ysndv7f-kded-6.20.0/bin/kded6          8MiB |
+|    0   N/A  N/A            9084      G   ...rkspace-6.5.5/bin/plasmashell        107MiB |
+|    0   N/A  N/A            9151      G   ...sma-desktop-6.5.5/bin/kaccess          8MiB |
+|    0   N/A  N/A            9153      G   ...it-kde-authentication-agent-1          8MiB |
+|    0   N/A  N/A            9268      G   ....5.5/libexec/DiscoverNotifier          8MiB |
+|    0   N/A  N/A            9356      G   ...ibexec/xdg-desktop-portal-kde          8MiB |
+|    0   N/A  N/A           17180      G   ...ace-6.5.5/libexec/baloorunner          8MiB |
+|    0   N/A  N/A         1204491      G   ...Tue, 31 Dec 2099 23:59:59 GMT          8MiB |
+|    0   N/A  N/A         1204587      G   ...rack-uuid=3190708988185955192         69MiB |
+|    0   N/A  N/A         1204594      G   ...-kwallet-6.20.0/bin/kwalletd6          8MiB |
+|    0   N/A  N/A         3328544      G   ...release/linux-unpacked/Hermes        104MiB |
+|    0   N/A  N/A         3681542      G   ...5/libexec/kscreenlocker_greet        123MiB |
++-----------------------------------------------------------------------------------------+

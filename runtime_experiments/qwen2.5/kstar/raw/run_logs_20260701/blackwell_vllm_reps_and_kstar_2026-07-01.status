@@ -1,0 +1,6 @@
+state=completed
+updated_at=2026-07-01T12:52:37-04:00
+log=/home/jade_hand/research/shadowkv/run_logs/blackwell_vllm_reps_and_kstar_2026-07-01.log
+completed_at=2026-07-01T12:52:37-04:00
+kstar_result_root=/home/jade_hand/research/shadowkv/results_kstar_prefix_profile_blackwell_2026-07-01
+vllm_result_root=/home/jade_hand/research/shadowkv/results_vllm_qwen32b_no_cache_apc_overlay_energy_5total_2026-07-01

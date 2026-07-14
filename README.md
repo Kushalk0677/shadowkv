@@ -1,11 +1,11 @@
-﻿# ShadowKV++: Novel Per-Request Utility Decisions for KV Cache Reuse
+# MeritKV: Novel Per-Request Utility Decisions for KV Cache Reuse
 
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](PENDING)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ShadowKV++ is a per-request policy controller for KV cache reuse in LLM serving. Instead of treating reuse as a yes/no prefix-cache mechanism, it asks whether reuse helps this particular request. Each candidate is scored with a net-utility objective, `U = benefit - cost - waste`, and the controller can admit reuse, bypass it, or record a semantic opportunity without blindly executing approximate KV substitution.
+MeritKV is a per-request policy controller for KV cache reuse in LLM serving. Instead of treating reuse as a yes/no prefix-cache mechanism, it asks whether reuse helps this particular request. Each candidate is scored with a net-utility objective, `U = benefit - cost - waste`, and the controller can admit reuse, bypass it, or record a semantic opportunity without blindly executing approximate KV substitution.
 
 > **Authors:** Kushal Khemani, Evan Leri, Dr. Sparsh Mittal
 
@@ -13,7 +13,7 @@ ShadowKV++ is a per-request policy controller for KV cache reuse in LLM serving.
 
 ## What Is Novel
 
-The central novelty is the per-request utility decision. A conventional prefix cache reuses whenever a matching prefix exists. ShadowKV++ adds a request-level admission step that estimates whether the matched reuse is actually worth executing under the current workload, model, and hardware conditions.
+The central novelty is the per-request utility decision. A conventional prefix cache reuses whenever a matching prefix exists. MeritKV adds a request-level admission step that estimates whether the matched reuse is actually worth executing under the current workload, model, and hardware conditions.
 
 This gives the system three useful properties:
 
@@ -25,7 +25,7 @@ This gives the system three useful properties:
 
 ## How It Works
 
-ShadowKV++ combines three cooperating components:
+MeritKV combines three cooperating components:
 
 - **TieredStateBank** - stores KV entries keyed by prefix token sequences with longest-prefix lookup via a radix trie. Per-prefix statistics track frequency, observation count, branching factor, and memory footprint.
 - **AdaptiveReuseController** - evaluates each request and returns a reuse plan: bypass, exact reuse, semantic opportunity, or guarded semantic reuse when the backend and safety checks allow it.
@@ -39,7 +39,7 @@ ShadowKV++ combines three cooperating components:
 
 The controlled HuggingFace results cover 5 models, 10 datasets, 3 prompt modes, and 3 seeds (`42`, `123`, `456`) on T4 and P100 GPUs. The aggregate CSVs live under `results/controlled_results/`.
 
-Baselines include no-cache, reactive prefix caching, greedy prefix caching, strict reactive prefix caching, frequency speculation, ShadowKV, and ShadowKV++.
+Baselines include no-cache, reactive prefix caching, greedy prefix caching, strict reactive prefix caching, frequency speculation, ShadowKV, and MeritKV.
 
 | Engine | Mean Speedup | Waste | Hit Rate |
 |--------|:-----------:|:-----:|:--------:|
@@ -49,9 +49,9 @@ Baselines include no-cache, reactive prefix caching, greedy prefix caching, stri
 | Strict reactive | 1.254x | 0.000 | 0.310 |
 | Frequency spec. | 1.208x | 0.284 | 0.617 |
 | ShadowKV | 1.287x | 0.264 | 0.606 |
-| **ShadowKV++** | **1.365x** | **0.156** | **0.402** |
+| **MeritKV** | **1.365x** | **0.156** | **0.402** |
 
-The headline result is not just higher hit rate. ShadowKV++ improves latency while reducing wasted speculative work relative to ShadowKV.
+The headline result is not just higher hit rate. MeritKV improves latency while reducing wasted speculative work relative to ShadowKV.
 
 ### Runtime Evaluation
 
@@ -59,9 +59,9 @@ Runtime-system experiments are stored in `runtime_experiments/` and cover SGLang
 
 | Metric | Value |
 |--------|-------|
-| ShadowKV++ vs LMCache at 7B | +16.7% |
-| ShadowKV++ at 32B over LMCache | +5.1% |
-| vLLM APC + ShadowKV++ vs no-cache at 32B | +19.0% |
+| MeritKV vs LMCache at 7B | +16.7% |
+| MeritKV at 32B over LMCache | +5.1% |
+| vLLM APC + MeritKV vs no-cache at 32B | +19.0% |
 | GPU energy saving, vLLM at 32B | about 25% |
 
 ### KV Cache Reuse Fidelity
@@ -105,7 +105,7 @@ experiments/
 
 results/
   controlled_results/          T4/P100 controlled benchmark JSONs and CSV summaries
-  realistic_results/           Process-isolated no-cache and ShadowKV++ JSON outputs
+  realistic_results/           Process-isolated no-cache and MeritKV JSON outputs
   fidelity_examples/           Per-sample KV reuse fidelity examples
   sweep_timing/                Small timing/smoke outputs
   RESULTS.md                   Public result-bundle guide
@@ -233,7 +233,7 @@ For GPU checks, use `experiments/fidelity_equiv_colab.ipynb` from the archive/ex
 |---|---|
 | Controlled T4/P100 benchmark JSONs and summaries | `results/controlled_results/` |
 | Aggregate controlled CSVs | `results/controlled_results/summary_by_engine.csv`, `results/controlled_results/summary_by_mode_engine.csv` |
-| Process-isolated no-cache and ShadowKV++ outputs | `results/realistic_results/` |
+| Process-isolated no-cache and MeritKV outputs | `results/realistic_results/` |
 | Fidelity example JSONs | `results/fidelity_examples/` |
 | Runtime-system experiments | `runtime_experiments/` |
 
@@ -273,7 +273,7 @@ To keep the repository lightweight:
 
 ```bibtex
 @misc{khemani2026shadowkv,
-  title={ShadowKV++: Novel Per-Request Utility Decisions for Waste-Aware KV Cache Reuse},
+  title={MeritKV: Novel Per-Request Utility Decisions for Waste-Aware KV Cache Reuse},
   author={Kushal Khemani and Evan Leri and Sparsh Mittal},
   year={2026},
   eprint={XXXX.XXXXX},

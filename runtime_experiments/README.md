@@ -1,43 +1,17 @@
-# Runtime Experiments: SGLang, LMCache, and vLLM
+# Runtime Experiments
 
-This directory contains curated runtime benchmark tables for ShadowKV++ on production LLM serving systems.
+This directory is organized by model family. Each model-family folder owns its runtime results and raw run files.
 
-## Hardware
+## Layout
 
-NVIDIA RTX PRO 6000 Blackwell.
+| Path | Contents |
+|---|---|
+| `qwen2.5/` | Current Qwen2.5 runtime results, curated tables, summaries, and included run files. |
+| `gemma4/` | Placeholder for Gemma 4 runtime results. Results have not been added yet. |
 
-## Models
+## Notes
 
-Qwen2.5 family: 1.5B, 3B, 7B, 14B, and 32B.
+- Qwen2.5 is the complete populated family at the moment.
+- Gemma 4 is intentionally present as a placeholder so new results can be added without changing the public layout later.
+- Runtime-specific organization is preserved inside each model-family folder: `vllm/`, `sglang/`, `lmcache/`, and `kstar/`.
 
-## Datasets
-
-Ten benchmark datasets are represented across the tables: AG News, Banking77, AlpacaEval, Dolly, DailyDialog, OASST1, UltraChat, SAMSum, XSum, and CNN/DailyMail.
-
-The runtime tables use templated and RAG-style prompt modes.
-
-## Engines
-
-| System | Engines |
-|--------|---------|
-| SGLang | RadixAttention, RadixAttention + ShadowKV++, LMCache |
-| vLLM | No cache, Automatic Prefix Caching, APC + ShadowKV++ |
-| LMCache | LMCache without native RadixAttention |
-
-## Key Results
-
-**SGLang:** ShadowKV++ achieves 16.7% speedup over LMCache at 7B, with benefit increasing up to the 7B point in this table.
-
-**vLLM:** At 32B, APC + ShadowKV++ improves over the no-cache baseline and reduces GPU energy in the measured setting.
-
-## Data Files
-
-| File | Rows | Notes |
-|------|-----:|-------|
-| `sglang/results.csv` | 290 | Mostly 5 models x 3 engines x 10 datasets x 2 modes, with missing dataset cells noted in `sglang/README.md` |
-| `vllm/results.csv` | 270 | 5-model table with measured 7B and 32B rows plus scaled smaller-model rows as noted in `vllm/README.md` |
-| `lmcache/results.csv` | 100 | 5 models x 1 engine x 10 datasets x 2 modes |
-| `summary.md` | - | Cross-runtime summary tables |
-| `build_complete_tables.py` | - | Table-regeneration helper for working copies that include raw deliverables |
-
-The row counts are the actual CSV row counts. They should not be read as a complete Cartesian product unless the per-runtime README says so.

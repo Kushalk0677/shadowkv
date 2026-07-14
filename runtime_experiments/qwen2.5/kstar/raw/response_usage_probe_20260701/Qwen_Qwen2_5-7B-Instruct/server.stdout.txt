@@ -1,0 +1,679 @@
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:299] 
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:299]        █     █     █▄   ▄█
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:299]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.19.2rc1.dev107+g4eafc7292
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:299]   █▄█▀ █     █     █     █  model   Qwen/Qwen2.5-7B-Instruct
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:299]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:299] 
+(APIServer pid=464) INFO 07-01 11:47:48 [utils.py:233] non-default args: {'model_tag': 'Qwen/Qwen2.5-7B-Instruct', 'host': '127.0.0.1', 'model': 'Qwen/Qwen2.5-7B-Instruct', 'dtype': 'float16', 'max_model_len': 4096, 'gpu_memory_utilization': 0.88, 'enable_prefix_caching': True}
+(APIServer pid=464) INFO 07-01 11:47:48 [model.py:554] Resolved architecture: Qwen2ForCausalLM
+(APIServer pid=464) WARNING 07-01 11:47:48 [model.py:2023] Casting torch.bfloat16 to torch.float16.
+(APIServer pid=464) INFO 07-01 11:47:48 [model.py:1685] Using max model len 4096
+(APIServer pid=464) INFO 07-01 11:47:48 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=8192.
+(APIServer pid=464) INFO 07-01 11:47:48 [vllm.py:845] Asynchronous scheduling is enabled.
+(APIServer pid=464) INFO 07-01 11:47:48 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'])
+(EngineCore pid=538) INFO 07-01 11:47:52 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev107+g4eafc7292) with config: model='Qwen/Qwen2.5-7B-Instruct', speculative_config=None, tokenizer='Qwen/Qwen2.5-7B-Instruct', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen/Qwen2.5-7B-Instruct, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'ir_enable_torch_wrap': True, 'splitting_ops': ['vllm::unified_attention_with_output', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240, 248, 256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448, 464, 480, 496, 512], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 512, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['native']), enable_flashinfer_autotune=True, moe_backend='auto')
+(EngineCore pid=538) INFO 07-01 11:47:53 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+(EngineCore pid=538) INFO 07-01 11:47:53 [nixl_utils.py:32] NIXL is available
+(EngineCore pid=538) INFO 07-01 11:47:53 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://192.168.1.151:40313 backend=nccl
+(EngineCore pid=538) INFO 07-01 11:47:53 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=538) INFO 07-01 11:47:53 [gpu_model_runner.py:4752] Starting to load model Qwen/Qwen2.5-7B-Instruct...
+(EngineCore pid=538) INFO 07-01 11:47:54 [cuda.py:368] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore pid=538) INFO 07-01 11:47:54 [flash_attn.py:637] Using FlashAttention version 2
+(EngineCore pid=538) INFO 07-01 11:47:54 [weight_utils.py:904] Filesystem type for checkpoints: ZFS. Checkpoint size: 14.19 GiB. Available RAM: 40.26 GiB.
+(EngineCore pid=538) INFO 07-01 11:47:54 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (ZFS) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+(EngineCore pid=538) INFO 07-01 11:48:01 [default_loader.py:384] Loading weights took 7.14 seconds
+(EngineCore pid=538) INFO 07-01 11:48:02 [gpu_model_runner.py:4854] Model loading took 14.25 GiB memory and 7.696992 seconds
+(EngineCore pid=538) INFO 07-01 11:48:04 [backends.py:1077] Using cache directory: /root/.cache/vllm/torch_compile_cache/a3dfa5c872/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore pid=538) INFO 07-01 11:48:04 [backends.py:1137] Dynamo bytecode transform time: 2.44 s
+(EngineCore pid=538) INFO 07-01 11:48:07 [backends.py:377] Cache the graph of compile range (1, 8192) for later use
+(EngineCore pid=538) INFO 07-01 11:48:09 [backends.py:398] Compiling a graph for compile range (1, 8192) takes 3.76 s
+(EngineCore pid=538) INFO 07-01 11:48:10 [decorators.py:665] saved AOT compiled function to /root/.cache/vllm/torch_compile_cache/torch_aot_compile/10cc7a691227f9b9a8892f1b8269a2ce8933c087601b74b12cca736daf94079f/rank_0_0/model
+(EngineCore pid=538) INFO 07-01 11:48:10 [monitor.py:48] torch.compile took 8.15 s in total
+(EngineCore pid=538) INFO 07-01 11:48:11 [monitor.py:76] Initial profiling/warmup run took 0.78 s
+(EngineCore pid=538) INFO 07-01 11:48:15 [gpu_model_runner.py:5928] Profiling CUDA graph memory: PIECEWISE=51 (largest=512), FULL=51 (largest=512)
+(EngineCore pid=538) INFO 07-01 11:48:16 [gpu_model_runner.py:6007] Estimated CUDA graph memory: 0.41 GiB total
+(EngineCore pid=538) INFO 07-01 11:48:16 [gpu_worker.py:440] Available KV cache memory: 66.51 GiB
+(EngineCore pid=538) INFO 07-01 11:48:16 [gpu_worker.py:456] CUDA graph memory profiling is enabled (default since v0.21.0). The current --gpu-memory-utilization=0.8800 is equivalent to --gpu-memory-utilization=0.8756 without CUDA graph memory profiling. To maintain the same effective KV cache size as before, increase --gpu-memory-utilization to 0.8844. To disable, set VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0.
+(EngineCore pid=538) INFO 07-01 11:48:16 [kv_cache_utils.py:1337] GPU KV cache size: 1,245,392 tokens
+(EngineCore pid=538) INFO 07-01 11:48:16 [kv_cache_utils.py:1342] Maximum concurrency for 4,096 tokens per request: 304.05x
+(EngineCore pid=538) INFO 07-01 11:48:19 [gpu_model_runner.py:6098] Graph capturing finished in 3 secs, took 0.37 GiB
+(EngineCore pid=538) INFO 07-01 11:48:19 [gpu_worker.py:600] CUDA graph pool memory: 0.37 GiB (actual), 0.41 GiB (estimated), difference: 0.04 GiB (11.6%).
+(EngineCore pid=538) INFO 07-01 11:48:19 [core.py:299] init engine (profile, create kv cache, warmup model) took 17.37 s (compilation: 6.20 s)
+(EngineCore pid=538) INFO 07-01 11:48:20 [vllm.py:845] Asynchronous scheduling is enabled.
+(EngineCore pid=538) INFO 07-01 11:48:20 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'])
+(APIServer pid=464) INFO 07-01 11:48:20 [api_server.py:598] Supported tasks: ['generate']
+(APIServer pid=464) WARNING 07-01 11:48:20 [model.py:1442] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'repetition_penalty': 1.05, 'temperature': 0.7, 'top_k': 20, 'top_p': 0.8}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.
+(APIServer pid=464) INFO 07-01 11:48:21 [hf.py:314] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=464) INFO 07-01 11:48:22 [api_server.py:602] Starting vLLM server on http://127.0.0.1:8000
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:37] Available routes are:
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /docs, Methods: GET, HEAD
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /tokenize, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /detokenize, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /load, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /version, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /health, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /metrics, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/models, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /ping, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /ping, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /invocations, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/chat/completions/batch, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/responses, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/completions, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/messages, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /generative_scoring, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=464) INFO 07-01 11:48:22 [launcher.py:46] Route: /v1/completions/render, Methods: POST
+(APIServer pid=464) INFO:     127.0.0.1:55204 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55208 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55220 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55226 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55242 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55256 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55272 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55286 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55292 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55306 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55322 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55332 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55344 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55346 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55352 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55368 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55370 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55386 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55388 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55402 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55410 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55416 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55426 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55432 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55440 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55452 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55454 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55470 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55478 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55486 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55496 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55502 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55518 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55520 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55528 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55542 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55556 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55560 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55568 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55580 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55596 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55606 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55608 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55610 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55622 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55634 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55646 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55656 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55666 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55680 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55692 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55696 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55700 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55702 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55718 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55720 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55732 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55746 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55752 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55764 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55766 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55772 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55776 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55792 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55808 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55822 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55828 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55836 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55838 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55852 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55854 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55858 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55870 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55882 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55892 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55898 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55904 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55906 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55920 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55924 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55934 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55940 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55948 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55958 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55974 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:55984 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:55996 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56004 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56008 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56018 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56034 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56046 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56050 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56058 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56066 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56068 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56078 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56086 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56102 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56114 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56120 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56134 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56140 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56150 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56166 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56174 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56178 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56188 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56196 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56200 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56208 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56220 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56222 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56226 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56238 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56252 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56256 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56260 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56266 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56280 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56292 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56304 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56310 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56312 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56322 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56326 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56342 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56344 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56352 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56368 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56378 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56394 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56400 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56404 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56418 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56428 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56442 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56456 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56472 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56474 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56476 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56484 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56500 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56510 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56526 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56540 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56544 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56560 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56564 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56572 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56576 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56588 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56594 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56598 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56608 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56610 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56616 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56628 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56634 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56650 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56656 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56670 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56672 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56674 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56684 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56692 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56700 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56708 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56710 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56720 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56730 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56746 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56750 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56760 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56764 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56778 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56780 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56790 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56804 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56828 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56838 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56846 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56850 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56852 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56864 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56880 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56884 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56894 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56896 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56908 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56912 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56922 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56926 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56942 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56952 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56968 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:56982 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:56992 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57006 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57016 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57028 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57034 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57044 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57046 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57048 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57064 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57070 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57082 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57088 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57092 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57102 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57108 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57116 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57132 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57144 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57152 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57156 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57170 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57172 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57176 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57192 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57204 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57212 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57218 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57232 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57240 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57250 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57264 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57278 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57290 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57304 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57314 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57326 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57340 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57354 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57360 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57376 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57382 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57396 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57412 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57422 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57426 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57428 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57438 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57454 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57462 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57468 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57480 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57490 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57500 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57502 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57512 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57526 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57542 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57552 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57566 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57570 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57576 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57578 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57580 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57596 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57606 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57620 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57630 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57638 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57650 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57656 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57658 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57668 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57678 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57688 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57702 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57710 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57718 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57728 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57734 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57740 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57742 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57748 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57758 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57774 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57778 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57794 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57804 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57820 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57824 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57832 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57840 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57852 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57854 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57864 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57876 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57890 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57894 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57906 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57912 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57918 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57920 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57932 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57940 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57952 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57966 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:57970 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57976 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:57988 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58004 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58014 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58028 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58042 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58048 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58060 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58066 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58068 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58070 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58082 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58092 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58096 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58108 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58114 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58130 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58146 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58162 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58172 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58182 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58184 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58186 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58196 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58208 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58214 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58230 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58244 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58258 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58274 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58276 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58278 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58288 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58290 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58292 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58302 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58306 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58314 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58326 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58330 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58336 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58342 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58344 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58348 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58350 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58356 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58372 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58386 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58388 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58398 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58414 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58424 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58440 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58448 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58454 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58460 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58476 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58480 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58496 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58512 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58514 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58522 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58526 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58534 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58548 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58564 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58566 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58574 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58576 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58592 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58600 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58606 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58618 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58632 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58642 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58658 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58672 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58680 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58688 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58692 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58704 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58708 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58720 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58728 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58736 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58738 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58742 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58754 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58756 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58762 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58778 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58790 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58800 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58806 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58814 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58826 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58830 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58840 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58844 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58848 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58864 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58870 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58886 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58894 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58906 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58920 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58936 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58946 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58948 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:58962 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58968 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:58982 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47762 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47776 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47778 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47794 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47802 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47814 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47816 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47818 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47820 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47832 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47842 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47844 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47848 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47864 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47876 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47886 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47900 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47912 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47914 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47920 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47926 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47938 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47940 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47948 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47954 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47960 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47972 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:47988 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:47990 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48000 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48004 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48012 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48022 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48026 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48030 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48032 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48034 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48044 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48056 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48068 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48080 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48086 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48090 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48100 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48108 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48112 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48118 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48120 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48136 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48142 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48144 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48160 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48162 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48178 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48182 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48192 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48204 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48206 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48216 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48228 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48244 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48248 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48264 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48272 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48284 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48298 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48306 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48310 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48318 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48328 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48332 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48344 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48358 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48362 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48372 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48388 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48402 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48404 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48408 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48410 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48426 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48436 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48438 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48440 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48448 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48464 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48474 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48486 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48492 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48506 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48520 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48532 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48536 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48546 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48556 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48562 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48576 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48578 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48588 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48604 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48614 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48616 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48620 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48632 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48634 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48642 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48650 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48656 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48660 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48666 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48682 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48694 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48708 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48718 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48728 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48740 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48752 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48764 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48770 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48774 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48784 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48796 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48808 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48820 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48826 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48840 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48842 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48844 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48860 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48874 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48884 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48890 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48894 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48898 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48906 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48920 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48924 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48932 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48942 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48954 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48962 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48968 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48976 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:48978 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:48990 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49006 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49016 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49018 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49020 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49028 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49038 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49054 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49062 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49076 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49092 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49104 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49120 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49134 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49140 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49150 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49158 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49174 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49190 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49202 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49218 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49230 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49234 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49250 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49262 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49264 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49280 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49292 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49306 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49320 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49328 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49342 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49346 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49362 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49370 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49380 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49390 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49402 - "POST /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49416 - "GET /reset_prefix_cache?timeout=30 HTTP/1.1" 404 Not Found
+(APIServer pid=464) INFO:     127.0.0.1:49418 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=464) INFO:     127.0.0.1:49430 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=538) INFO 07-01 11:48:27 [core.py:1234] Shutdown initiated (timeout=0)
+(EngineCore pid=538) INFO 07-01 11:48:27 [core.py:1257] Shutdown complete

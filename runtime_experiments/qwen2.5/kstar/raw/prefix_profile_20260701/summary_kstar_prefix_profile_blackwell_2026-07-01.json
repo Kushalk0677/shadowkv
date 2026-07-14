@@ -1,0 +1,41 @@
+{
+  "models": [
+    "Qwen/Qwen2.5-1.5B-Instruct",
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen2.5-32B-Instruct"
+  ],
+  "prefix_lengths": [
+    8,
+    16,
+    32,
+    48,
+    64,
+    96
+  ],
+  "warmup_iters": 5,
+  "measured_iters": 20,
+  "rows": 18,
+  "raw_rows": 450,
+  "inferred_k_star": [
+    {
+      "model": "Qwen/Qwen2.5-1.5B-Instruct",
+      "inferred_k_star_tokens": 16,
+      "positive_points": 5
+    },
+    {
+      "model": "Qwen/Qwen2.5-7B-Instruct",
+      "inferred_k_star_tokens": 16,
+      "positive_points": 4
+    },
+    {
+      "model": "Qwen/Qwen2.5-32B-Instruct",
+      "inferred_k_star_tokens": 16,
+      "positive_points": 5
+    }
+  ],
+  "artifacts": {
+    "raw_jsonl": "/workspace/shadowkv/results_kstar_prefix_profile_blackwell_2026-07-01/kstar_prefix_profile_raw.jsonl",
+    "csv": "/workspace/shadowkv/results_kstar_prefix_profile_blackwell_2026-07-01/kstar_prefix_profile_blackwell_2026-07-01.csv",
+    "json": "/workspace/shadowkv/results_kstar_prefix_profile_blackwell_2026-07-01/kstar_prefix_profile_blackwell_2026-07-01.json"
+  }
+}

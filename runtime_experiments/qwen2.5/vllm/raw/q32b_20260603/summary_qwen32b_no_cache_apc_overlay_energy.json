@@ -1,0 +1,53 @@
+{
+  "root": "/home/jade_hand/research/shadowkv/results_vllm_qwen32b_no_cache_apc_overlay_energy_2026-06-03",
+  "full_jobs": 30,
+  "smoke_jobs": 3,
+  "datasets": [
+    "ag_news",
+    "daily_dialog",
+    "dolly",
+    "samsum",
+    "xsum"
+  ],
+  "modes": [
+    "rag",
+    "templated"
+  ],
+  "baselines": [
+    "vllm_apc",
+    "vllm_apc_shadowkv_plus",
+    "vllm_no_cache"
+  ],
+  "total_prompt_tokens": 1791222,
+  "total_vllm_cached_tokens": 588416.0,
+  "total_gpu_energy_j": 278331.044,
+  "headline_by_baseline": [
+    {
+      "baseline": "vllm_no_cache",
+      "jobs": 10,
+      "mean_latency_ms_avg": 72.78542918229505,
+      "p95_latency_ms_avg": 90.34516627434641,
+      "gpu_energy_j_total": 111318.145,
+      "idle_adjusted_gpu_energy_j_total": 92659.29426559097,
+      "vllm_prompt_tokens_cached_delta_total": 0.0
+    },
+    {
+      "baseline": "vllm_apc",
+      "jobs": 10,
+      "mean_latency_ms_avg": 59.42842607582861,
+      "p95_latency_ms_avg": 73.94893541932106,
+      "gpu_energy_j_total": 83366.978,
+      "idle_adjusted_gpu_energy_j_total": 68240.87806486484,
+      "vllm_prompt_tokens_cached_delta_total": 294208.0
+    },
+    {
+      "baseline": "vllm_apc_shadowkv_plus",
+      "jobs": 10,
+      "mean_latency_ms_avg": 58.952392893297656,
+      "p95_latency_ms_avg": 73.45437317853794,
+      "gpu_energy_j_total": 83645.921,
+      "idle_adjusted_gpu_energy_j_total": 68141.44961905637,
+      "vllm_prompt_tokens_cached_delta_total": 294208.0
+    }
+  ]
+}
