@@ -1,5 +1,10 @@
 # Raw-mode Mitigation Variants
 
+## Engine Name Aliases
+
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 This patch replaces the failed short-prefix raw conservative gate with a stricter raw utility gate and adds two explicit baselines so raw-mode mitigation can be evaluated side-by-side.
 
 ## Engines added / changed
@@ -40,10 +45,10 @@ This preserves the earlier best-latency fastpath behavior before the stricter ra
 
 For raw mode, compare:
 
-1. `shadow_kv_plus`
-2. `shadow_kv_plus_raw_observer`
-3. `shadow_kv_plus_best_latency`
-4. `shadow_kv`
+1. MeritKV (`shadow_kv_plus`)
+2. MeritKV-RawObserver (`shadow_kv_plus_raw_observer`)
+3. MeritKV-BestLatency (`shadow_kv_plus_best_latency`)
+4. MeritKV-Sem (`shadow_kv`)
 5. `strict_reactive_prefix_cache`
 6. `no_cache`
 

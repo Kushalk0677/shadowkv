@@ -1,5 +1,8 @@
 # Reproducing Blackwell Semantic n=128 Runs
 
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 Use `experiments/run_blackwell_semantic_n128.py` for the RTX PRO 6000 Blackwell semantic-reuse sweep. This is the cleaned public version of the local handoff package; the old zip packages are not required.
 
 ## Smoke Test
@@ -29,8 +32,8 @@ Default engines:
 
 ```text
 no_cache
-shadow_kv
-shadow_kv_plus
+shadow_kv       # MeritKV-Sem
+shadow_kv_plus  # MeritKV
 ```
 
 Default prompt mode is `semantic`, and approximate semantic KV reuse is enabled by default so the run can measure executed semantic reuse. Treat those results as experimental evidence, not a production-safety claim.

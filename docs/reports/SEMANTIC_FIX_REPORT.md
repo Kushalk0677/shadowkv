@@ -1,5 +1,10 @@
 # Semantic Opportunity Fix Report
 
+## Engine Name Aliases
+
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 ## Problem observed
 
 The previous semantic-mode HF run produced useful adaptive-controller results, but all semantic novelty counters stayed at zero:
@@ -59,7 +64,7 @@ python experiments/run_benchmark.py \
   --output_dir results_semantic_fix_qwen_ag_news
 ```
 
-Expected for `shadow_kv_plus` on HF semantic mode:
+Expected for MeritKV (`shadow_kv_plus`) on HF semantic mode:
 
 - `semantic_opportunity_plans_total > 0`
 - `semantic_blocked_by_backend_total > 0`

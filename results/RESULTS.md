@@ -1,13 +1,24 @@
 # Canonical Result Bundle
 
-This directory is the public result bundle for the MeritKV draft. It reports `shadow_kv` as MeritKV-Sem and `shadow_kv_plus` as MeritKV. It keeps the controlled aggregate results, realistic isolated-result traces, fidelity examples, and small timing smoke outputs in one place.
+## Engine Name Aliases
+
+Raw artifacts keep the stable engine IDs used during execution. Public-facing text maps them as follows:
+
+| Engine ID | Display name |
+|---|---|
+| `shadow_kv_plus` | MeritKV |
+| `shadow_kv` | MeritKV-Sem |
+| `shadow_kv_plus_lite` | MeritKV-Lite |
+
+
+This directory is the public result bundle for the MeritKV draft. It reports `shadow_kv` as MeritKV-Sem, `shadow_kv_plus` as MeritKV, and `shadow_kv_plus_lite` as MeritKV-Lite. It keeps the controlled aggregate results, realistic isolated-result traces, fidelity examples, and small timing smoke outputs in one place.
 
 ## Directory Layout
 
 ```text
 results/
   controlled_results/     # T4/P100 controlled multi-engine benchmark outputs and CSV summaries
-  realistic_results/      # Process-isolated no_cache and shadow_kv_plus JSON outputs
+  realistic_results/      # Process-isolated no_cache and MeritKV (`shadow_kv_plus`) JSON outputs
   fidelity_examples/      # Per-sample KV reuse fidelity examples
   sweep_timing/           # Small fake-backend timing smoke outputs
   RESULTS.md              # This overview
@@ -62,7 +73,7 @@ The CSV files contain the authoritative aggregate values. Prefer the CSVs over c
 
 ```text
 realistic_results/no_cache/<model>/<prompt_mode>/seed_<seed>/<dataset>/benchmark_*.json
-realistic_results/shadow_kv_plus/<model>/<prompt_mode>/seed_<seed>/<dataset>/benchmark_*.json
+realistic_results/shadow_kv_plus/<model>/<prompt_mode>/seed_<seed>/<dataset>/benchmark_*.json  # MeritKV
 ```
 
 Use these files to inspect isolated no-cache and MeritKV behavior under a cleaner per-engine process boundary. These are not the same as the controlled aggregate CSVs.

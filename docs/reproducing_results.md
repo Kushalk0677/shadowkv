@@ -1,5 +1,8 @@
 # Reproducing Results
 
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 This document describes how to reproduce the repository's HuggingFace benchmark checks and how to read the runtime experiment tables.
 
 ## Canonical HF Results
@@ -49,7 +52,7 @@ The public aggregate results summarize 5 models, 10 datasets, 3 prompt modes, an
 ```text
 results/
   controlled_results/     # T4/P100 controlled JSONs and aggregate CSVs
-  realistic_results/      # Process-isolated no_cache and shadow_kv_plus JSONs
+  realistic_results/      # Process-isolated no_cache and MeritKV (`shadow_kv_plus`) JSONs
   fidelity_examples/      # Per-sample fidelity examples
   sweep_timing/           # Small timing/smoke outputs
 ```

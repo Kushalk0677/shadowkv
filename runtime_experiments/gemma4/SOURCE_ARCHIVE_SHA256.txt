@@ -1,0 +1,1 @@
+9bac41d63e04b585882f9a6c8b1edd44bbe77b04d1c430a41c3a69919b937800  shadowkv_gemma4_blackwell_runtime_matrix_2026-07-17.zip

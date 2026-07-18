@@ -1,19 +1,21 @@
 # Gemma 4 Runtime Experiments
 
-This is a placeholder for Gemma 4 runtime results.
+This folder contains the Gemma 4 Blackwell runtime baseline matrix from `shadowkv_gemma4_blackwell_runtime_matrix_2026-07-17.zip`.
 
 ## Status
 
-Gemma 4 results have not been added yet.
+Populated from a complete 150-cell runtime matrix: 5 Gemma 4 model variants x 5 datasets x 2 prompt modes x 3 runtime systems. Each cell used 256 requests, seed 42, temperature 0, and one output token. The archive audit reports 38,400 total requests, zero request failures, NVML energy for all cells, and runtime-native cache evidence.
 
-## Intended Layout
+## Layout
 
-| Path | Intended contents |
+| Path | Contents |
 |---|---|
-| `sglang/` | Gemma 4 SGLang curated table and run files. |
-| `vllm/` | Gemma 4 vLLM curated table and run files. |
-| `lmcache/` | Gemma 4 LMCache subset, if applicable. |
-| `kstar/` | Gemma 4 k-star prefix profile, if applicable. |
+| `vllm/` | vLLM APC curated table, raw result JSONs and metadata. |
+| `sglang/` | SGLang RadixAttention curated table, raw result JSONs and metadata. |
+| `lmcache/` | LMCache + vLLM curated table, raw result JSONs and metadata. |
+| `analysis/` | Cross-runtime aggregate tables, matched comparisons, audit, block plan, and source report. |
+| `kstar/` | Reserved for Gemma 4 k-star prefix profile results; no Gemma 4 k-star run is included in this archive. |
 
-The empty runtime subfolders are kept so the final layout matches the populated Qwen2.5 folder.
+## Important Scope Note
 
+This is a runtime-baseline matrix. It compares vLLM APC, SGLang RadixAttention, and LMCache + vLLM. It does not include a no-cache arm and does not include MeritKV admission-policy results.

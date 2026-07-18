@@ -1,5 +1,10 @@
 # MeritKV Full Repository Integration Report
 
+## Engine Name Aliases
+
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 ## What changed
 
 This repository now preserves the original benchmark/results structure and adds MeritKV as an integrated experimental engine.
@@ -41,8 +46,8 @@ The benchmark will include:
 
 ```text
 frequency_speculative
-shadow_kv
-shadow_kv_plus
+shadow_kv       # MeritKV-Sem
+shadow_kv_plus  # MeritKV
 ```
 
 ## Correctness posture
@@ -55,7 +60,7 @@ Semantic partial reuse is a simulator/research-mode mechanism unless explicitly 
 
 - Python compile check for modified modules.
 - Full unit test suite.
-- Fake-backend quick benchmark with `shadow_kv_plus` included.
+- Fake-backend quick benchmark with MeritKV (`shadow_kv_plus`) included.
 - Existing result archives preserved.
 
 
@@ -86,7 +91,7 @@ for the same serving task. This creates semantically equivalent request families
 without identical token prefixes, so it is a direct novelty test against ordinary
 prefix caching.
 
-New metrics emitted by `shadow_kv_plus`:
+New metrics emitted by MeritKV (`shadow_kv_plus`):
 
 - `policy_semantic_partial_total`
 - `semantic_opportunity_plans_total`

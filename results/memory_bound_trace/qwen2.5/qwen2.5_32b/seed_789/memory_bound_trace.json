@@ -1,0 +1,84 @@
+{
+  "config": {
+    "model": "Qwen/Qwen2.5-32B-Instruct",
+    "backend": "vllm",
+    "seed": 789,
+    "n_phase1": 40,
+    "n_phase2": 30,
+    "n_phase3": 30
+  },
+  "ledger": {
+    "no_cache": {
+      "mean_latency_ms": 72.92,
+      "hit_rate": 0.0,
+      "reuse_successes": 0,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.0
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.0
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.0
+          }
+        },
+        "evictions": 0,
+        "victim_recovery_speedup_vs_no_cache": 1.0
+      }
+    },
+    "native": {
+      "mean_latency_ms": 59.52,
+      "hit_rate": 0.5944,
+      "reuse_successes": 59,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.5
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.493
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.548
+          }
+        },
+        "evictions": 12,
+        "victim_recovery_speedup_vs_no_cache": 1.2251
+      }
+    },
+    "meritkv": {
+      "mean_latency_ms": 59.72,
+      "hit_rate": 0.7948,
+      "reuse_successes": 79,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.5
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.8565
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.916
+          }
+        },
+        "evictions": 3,
+        "victim_recovery_speedup_vs_no_cache": 1.221
+      }
+    }
+  }
+}

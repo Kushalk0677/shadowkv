@@ -1,6 +1,9 @@
 # Semantic Correctness Ablations
 
-MeritKV now exposes three semantic-reuse ablation engines. They are intentionally separate from the default safe `shadow_kv_plus` engine so the paper can distinguish detected semantic opportunity from actually executed approximate KV reuse.
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
+MeritKV now exposes three semantic-reuse ablation engines. They are intentionally separate from the default safe MeritKV (`shadow_kv_plus`) engine so the paper can distinguish detected semantic opportunity from actually executed approximate KV reuse.
 
 ## Engines
 
@@ -16,7 +19,7 @@ This adds:
 - `shadow_kv_plus_early_layer`
 - `shadow_kv_plus_logit_guard`
 
-The default `shadow_kv_plus` remains conservative: it detects semantic opportunities but blocks unsafe approximate reuse on real HF backends.
+The default MeritKV (`shadow_kv_plus`) remains conservative: it detects semantic opportunities but blocks unsafe approximate reuse on real HF backends.
 
 ## 1. Scaffold-only reuse
 

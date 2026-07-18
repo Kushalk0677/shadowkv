@@ -1,5 +1,16 @@
 # CLAIMS TO ARTIFACTS
 
+## Engine Name Aliases
+
+Raw artifacts keep the stable engine IDs used during execution. Public-facing text maps them as follows:
+
+| Engine ID | Display name |
+|---|---|
+| `shadow_kv_plus` | MeritKV |
+| `shadow_kv` | MeritKV-Sem |
+| `shadow_kv_plus_lite` | MeritKV-Lite |
+
+
 This file is the reviewer's map from each paper claim to the table, raw log, and reproduction command that supports it. Every claim listed here has an associated artifact in this repository.
 
 ---
@@ -439,7 +450,7 @@ python experiments/run_blackwell_semantic_n128.py
 
 **Directories:**
 - `results/controlled_results/` — 898 benchmark JSONs (900 planned; 2 Phi-3 templated samsum runs on T4 were unavailable in the source bundle), and aggregate CSVs
-- `results/realistic_results/` — 3,000 process-isolated JSONs (no_cache and shadow_kv_plus)
+- `results/realistic_results/` — 3,000 process-isolated JSONs (no_cache and MeritKV (`shadow_kv_plus`))
 
 **Architecture invariant:** Both regimes use the same core components (TieredStateBank, AdaptiveReuseController, CostAwareSlackPolicy, SemanticKVIndex). Only the execution infrastructure (in-process harness vs per-engine subprocess boundary) differs.
 

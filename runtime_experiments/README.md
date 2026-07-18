@@ -7,11 +7,11 @@ This directory is organized by model family. Each model-family folder owns its r
 | Path | Contents |
 |---|---|
 | `qwen2.5/` | Current Qwen2.5 runtime results, curated tables, summaries, and included run files. |
-| `gemma4/` | Placeholder for Gemma 4 runtime results. Results have not been added yet. |
+| `gemma4/` | Gemma 4 Blackwell runtime baseline matrix, curated tables, summaries, and included run files. |
 
 ## Notes
 
 - Qwen2.5 is the complete populated family at the moment.
-- Gemma 4 is intentionally present as a placeholder so new results can be added without changing the public layout later.
+- Gemma 4 is populated with the Blackwell runtime baseline matrix for vLLM APC, SGLang RadixAttention, and LMCache + vLLM.
 - Runtime-specific organization is preserved inside each model-family folder: `vllm/`, `sglang/`, `lmcache/`, and `kstar/`.
 

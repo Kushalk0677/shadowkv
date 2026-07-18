@@ -1,0 +1,7 @@
+model,engine,seeds,speedup_vs_no_cache_mean,victim_recovery_hit_rate,evictions,declined_admissions_phase1
+google/gemma-4-12B-it,no_cache,5,1.0,0.0,0,0
+google/gemma-4-12B-it,native,5,1.2177,0.95,8,0
+google/gemma-4-12B-it,meritkv,5,1.2276,0.995,3,30
+google/gemma-4-31B-it,no_cache,5,1.0,0.0,0,0
+google/gemma-4-31B-it,native,5,1.1564,0.5479999999999999,12,0
+google/gemma-4-31B-it,meritkv,5,1.1895,0.95,2.5,35

@@ -1,5 +1,8 @@
 # Architectural Robustness: Controlled and Realistic Validation
 
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 MeritKV is evaluated under two complementary result regimes. The purpose is not to present one best-case number, but to show how the same per-request utility controller behaves under controlled benchmark conditions and under cleaner deployment-style process boundaries.
 
 | Regime | Files | Purpose |
@@ -56,7 +59,7 @@ The realistic bundle contains process-isolated traces for the most important dep
 ```text
 results/realistic_results/
   no_cache/**/benchmark_*.json
-  shadow_kv_plus/**/benchmark_*.json
+  MeritKV (`shadow_kv_plus`) benchmark JSONs: `shadow_kv_plus/**/benchmark_*.json`
 ```
 
 Use these files when checking whether the policy still behaves sensibly when each engine starts from a cleaner process boundary. They are not a replacement for the controlled aggregate CSVs; they are a sanity check that the measured gains are not only artifacts of one in-process benchmark layout.
@@ -82,7 +85,7 @@ Together, they support a more honest claim: MeritKV improves reuse decisions by 
 ```text
 results/
   controlled_results/     # Controlled T4/P100 benchmark outputs and CSV summaries
-  realistic_results/      # Process-isolated no_cache and shadow_kv_plus outputs
+  realistic_results/      # Process-isolated no_cache and MeritKV (`shadow_kv_plus`) outputs
   fidelity_examples/      # Per-sample KV reuse fidelity examples
   sweep_timing/           # Small timing/smoke outputs
   RESULTS.md              # Public result-bundle guide

@@ -1,5 +1,8 @@
 # Semantic Fidelity and Correctness Boundary
 
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 This document describes how the repository treats semantic KV reuse. The short version is simple: semantic matching is useful, but approximate semantic KV substitution is not assumed to be correctness-preserving by default.
 
 ## Claim Boundary
@@ -9,7 +12,7 @@ MeritKV makes two separate claims:
 1. It can identify and score semantic reuse opportunities that exact-prefix caches miss.
 2. It can explicitly bypass or block approximate reuse when the request-level utility or correctness boundary is not good enough.
 
-That is different from claiming that arbitrary semantic KV reuse is safe. The default `shadow_kv_plus` path on real HF-style backends is conservative: it records semantic opportunity metrics and avoids unsafe approximate KV substitution unless an explicit ablation or guarded execution path is enabled.
+That is different from claiming that arbitrary semantic KV reuse is safe. The default MeritKV (`shadow_kv_plus`) path on real HF-style backends is conservative: it records semantic opportunity metrics and avoids unsafe approximate KV substitution unless an explicit ablation or guarded execution path is enabled.
 
 ## Fidelity Question
 

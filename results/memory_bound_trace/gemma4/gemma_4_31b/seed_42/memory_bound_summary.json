@@ -1,0 +1,20 @@
+{
+  "no_cache": {
+    "mean_latency_ms": 80.04036956861412,
+    "hit_rate": 0.0,
+    "evictions": 0,
+    "victim_recovery_hit_rate": 0.0
+  },
+  "native": {
+    "mean_latency_ms": 67.74438811978985,
+    "hit_rate": 0.5427474369831116,
+    "evictions": 12,
+    "victim_recovery_hit_rate": 0.5479999999999999
+  },
+  "meritkv": {
+    "mean_latency_ms": 65.12536320424901,
+    "hit_rate": 0.9303623314892715,
+    "evictions": 2.5,
+    "victim_recovery_hit_rate": 0.95
+  }
+}

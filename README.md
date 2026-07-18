@@ -1,5 +1,16 @@
 # MeritKV: Novel Per-Request Utility Decisions for KV Cache Reuse
 
+## Engine Name Aliases
+
+Raw artifacts keep the stable engine IDs used during execution. Public-facing text maps them as follows:
+
+| Engine ID | Display name |
+|---|---|
+| `shadow_kv_plus` | MeritKV |
+| `shadow_kv` | MeritKV-Sem |
+| `shadow_kv_plus_lite` | MeritKV-Lite |
+
+
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](PENDING)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)

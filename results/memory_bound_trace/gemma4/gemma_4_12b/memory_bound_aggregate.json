@@ -1,0 +1,46 @@
+{
+  "config": {
+    "model": "google/gemma-4-12B-it",
+    "backend": "vllm",
+    "device": "cuda",
+    "dtype": "float16",
+    "seeds": [
+      42,
+      123,
+      456,
+      789,
+      999
+    ],
+    "engines": [
+      "no_cache",
+      "native",
+      "meritkv"
+    ]
+  },
+  "aggregate": {
+    "no_cache": {
+      "seeds": 5,
+      "speedup_vs_no_cache_mean": 1.0,
+      "hit_rate": 0.0,
+      "evictions": 0,
+      "victim_recovery_hit_rate": 0.0,
+      "declined_admissions_phase1": 0
+    },
+    "native": {
+      "seeds": 5,
+      "speedup_vs_no_cache_mean": 1.2177,
+      "hit_rate": 0.95,
+      "evictions": 8,
+      "victim_recovery_hit_rate": 0.95,
+      "declined_admissions_phase1": 0
+    },
+    "meritkv": {
+      "seeds": 5,
+      "speedup_vs_no_cache_mean": 1.2276,
+      "hit_rate": 0.995,
+      "evictions": 3,
+      "victim_recovery_hit_rate": 0.995,
+      "declined_admissions_phase1": 30
+    }
+  }
+}

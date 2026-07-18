@@ -1,0 +1,84 @@
+{
+  "config": {
+    "model": "Qwen/Qwen2.5-14B-Instruct",
+    "backend": "vllm",
+    "seed": 789,
+    "n_phase1": 40,
+    "n_phase2": 30,
+    "n_phase3": 30
+  },
+  "ledger": {
+    "no_cache": {
+      "mean_latency_ms": 58.52,
+      "hit_rate": 0.0,
+      "reuse_successes": 0,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.0
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.0
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.0
+          }
+        },
+        "evictions": 0,
+        "victim_recovery_speedup_vs_no_cache": 1.0
+      }
+    },
+    "native": {
+      "mean_latency_ms": 54.82,
+      "hit_rate": 0.8,
+      "reuse_successes": 80,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.5
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 1.0
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 1.0
+          }
+        },
+        "evictions": 5,
+        "victim_recovery_speedup_vs_no_cache": 1.0675
+      }
+    },
+    "meritkv": {
+      "mean_latency_ms": 54.72,
+      "hit_rate": 0.8,
+      "reuse_successes": 80,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.5
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 1.0
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 1.0
+          }
+        },
+        "evictions": 5,
+        "victim_recovery_speedup_vs_no_cache": 1.0694
+      }
+    }
+  }
+}

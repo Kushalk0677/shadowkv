@@ -1,0 +1,7 @@
+model,engine,seeds,speedup_vs_no_cache_mean,victim_recovery_hit_rate,evictions,declined_admissions_phase1
+Qwen/Qwen2.5-14B-Instruct,no_cache,5,1.0,0.0,0.0,0.0
+Qwen/Qwen2.5-14B-Instruct,native,5,1.0676,1.0,5.6,0.0
+Qwen/Qwen2.5-14B-Instruct,meritkv,5,1.0696,1.0,5.2,27.4
+Qwen/Qwen2.5-32B-Instruct,no_cache,5,1.0,0.0,0.0,0.0
+Qwen/Qwen2.5-32B-Instruct,native,5,1.2256,0.548,11.8,0.0
+Qwen/Qwen2.5-32B-Instruct,meritkv,5,1.2215,0.916,3.2,34.6

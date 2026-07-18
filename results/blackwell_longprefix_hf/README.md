@@ -1,5 +1,16 @@
 # Blackwell Long-Prefix HF Results
 
+## Engine Name Aliases
+
+Raw artifacts keep the stable engine IDs used during execution. Public-facing text maps them as follows:
+
+| Engine ID | Display name |
+|---|---|
+| `shadow_kv_plus` | MeritKV |
+| `shadow_kv` | MeritKV-Sem |
+| `shadow_kv_plus_lite` | MeritKV-Lite |
+
+
 This folder is a complete, standalone result package for the Blackwell long-prefix HF experiment. Model outputs are placed together under `raw_results/`, and the top-level CSVs summarize the full package.
 
 **Process isolation**: Each engine was run in a separate process. The model was loaded from scratch for every (model, dataset, engine, seed) combination. These are cold-start measurements, not shared-process warm-harness results.
@@ -8,7 +19,7 @@ This folder is a complete, standalone result package for the Blackwell long-pref
 
 - `aggregate_summary.csv`: model/engine aggregate metrics.
 - `dataset_results.csv`: dataset-level comparisons.
-- `model_summary.csv`: one `shadow_kv_plus` row per kept model instance.
+- `model_summary.csv`: one MeritKV (`shadow_kv_plus`) row per kept model instance.
 - `raw_results/`: raw benchmark trees for all kept model instances, plus combined `all_results.csv` and `comparisons_vs_no_cache.csv`.
 - `raw_result_directory_map.csv`: mapping from package model/support directories to their combined names.
 - `fidelity_results.md`: KV reuse fidelity protocol and aggregate ROUGE-L results.
@@ -82,11 +93,15 @@ The high-level fidelity result is architecture-dependent. Gemma-4 models are con
 
 ## Interpretation
 
-All checked `shadow_kv_plus` cells executed the intended exact long-scaffold reuse path: 127/128 reuse successes, 16,256 reused prefix tokens, zero waste, and no backend fallbacks. These runs are evidence for reliable exact-scaffold KV reuse under the HF backend.
+All checked MeritKV (`shadow_kv_plus`) cells executed the intended exact long-scaffold reuse path: 127/128 reuse successes, 16,256 reused prefix tokens, zero waste, and no backend fallbacks. These runs are evidence for reliable exact-scaffold KV reuse under the HF backend.
 
 They are not evidence for approximate semantic-partial reuse. The measured reuse path is exact scaffold reuse, not semantic partial reuse.
 
 The results show a clear break-even behavior. Larger Gemma and Qwen models benefit from reuse, while very small models can lose latency despite correct reuse because fixed planning and external-KV overhead dominate the saved prefill work.
+
+## Extensions
+
+- `extensions/gemma31_all_engines_20260715/`: Gemma 4 31B single-seed all-engine HF Blackwell extension. This is kept separate from the main multi-seed combined tables because it compares 11 engines for one model rather than only the primary MeritKV row across all models.
 
 ## Caveats
 

@@ -1,0 +1,84 @@
+{
+  "config": {
+    "model": "google/gemma-4-12B-it",
+    "backend": "vllm",
+    "seed": 999,
+    "n_phase1": 40,
+    "n_phase2": 30,
+    "n_phase3": 30
+  },
+  "ledger": {
+    "no_cache": {
+      "mean_latency_ms": 46.141031981250336,
+      "hit_rate": 0.0,
+      "reuse_successes": 0,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.0
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.0
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.0
+          }
+        },
+        "evictions": 0,
+        "victim_recovery_speedup_vs_no_cache": 1.0
+      }
+    },
+    "native": {
+      "mean_latency_ms": 36.098505231601436,
+      "hit_rate": 0.9218704293016494,
+      "reuse_successes": 38,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.5
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.855
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.95
+          }
+        },
+        "evictions": 8,
+        "victim_recovery_speedup_vs_no_cache": 1.2177419354838708
+      }
+    },
+    "meritkv": {
+      "mean_latency_ms": 37.57708382355784,
+      "hit_rate": 1.0132574093344187,
+      "reuse_successes": 39,
+      "requests_seen": 100,
+      "memory_trace": {
+        "phase_summary": {
+          "distractor_pressure": {
+            "requests": 64,
+            "hit_rate": 0.5
+          },
+          "victim_recovery_first": {
+            "requests": 15,
+            "hit_rate": 0.8955
+          },
+          "victim_recovery_later": {
+            "requests": 15,
+            "hit_rate": 0.995
+          }
+        },
+        "evictions": 3,
+        "victim_recovery_speedup_vs_no_cache": 1.2276422764227641
+      }
+    }
+  }
+}

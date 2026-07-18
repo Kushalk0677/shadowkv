@@ -1,0 +1,46 @@
+{
+  "config": {
+    "model": "Qwen/Qwen2.5-32B-Instruct",
+    "backend": "vllm",
+    "device": "cuda",
+    "dtype": "float16",
+    "seeds": [
+      42,
+      123,
+      456,
+      789,
+      999
+    ],
+    "engines": [
+      "no_cache",
+      "native",
+      "meritkv"
+    ]
+  },
+  "aggregate": {
+    "no_cache": {
+      "seeds": 5,
+      "speedup_vs_no_cache_mean": 1.0,
+      "hit_rate": 0.0,
+      "evictions": 0.0,
+      "victim_recovery_hit_rate": 0.0,
+      "declined_admissions_phase1": 0.0
+    },
+    "native": {
+      "seeds": 5,
+      "speedup_vs_no_cache_mean": 1.2256,
+      "hit_rate": 0.548,
+      "evictions": 11.8,
+      "victim_recovery_hit_rate": 0.548,
+      "declined_admissions_phase1": 0.0
+    },
+    "meritkv": {
+      "seeds": 5,
+      "speedup_vs_no_cache_mean": 1.2215,
+      "hit_rate": 0.916,
+      "evictions": 3.2,
+      "victim_recovery_hit_rate": 0.916,
+      "declined_admissions_phase1": 34.6
+    }
+  }
+}

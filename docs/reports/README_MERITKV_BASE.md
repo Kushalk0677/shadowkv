@@ -1,5 +1,10 @@
 # MeritKV-Sem: Tiered Prefix Caching for LLM Serving
 
+## Engine Name Aliases
+
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 Research code for testing adaptive prefix reuse in LLM serving. The repository includes CPU-friendly baselines, public dataset loaders, benchmark scripts, and basic diagnostics.
 
 ## Included baselines
@@ -120,13 +125,13 @@ python experiments/run_benchmark.py \
 
 ## MeritKV rewrite
 
-This repo now includes `shadow_kv_plus`, a new experimental engine that reframes MeritKV-Sem as a policy-driven inference controller rather than a cache mechanism.
+This repo now includes MeritKV (`shadow_kv_plus`), a new experimental engine that reframes MeritKV-Sem as a policy-driven inference controller rather than a cache mechanism.
 
 ### What changed
 
 - **Adaptive decision controller**: `src/proactive_kv_cache/controller.py` computes a per-request reuse plan before execution. It scores exact reuse, semantic partial reuse, and bypass using a net-utility objective: expected benefit minus expected cost minus expected waste.
 - **Semantic KV index**: `src/proactive_kv_cache/semantic.py` adds a dependency-free token sketch index. It is used as a lightweight semantic signal for retrieval and policy decisions.
-- **Fine-grained reuse model**: `shadow_kv_plus` records a logical layer-reuse ratio for each admitted plan. Exact-prefix KV reuse remains correctness-preserving on real backends; approximate semantic partial reuse is only enabled for the `FakeBackend` simulator.
+- **Fine-grained reuse model**: MeritKV (`shadow_kv_plus`) records a logical layer-reuse ratio for each admitted plan. Exact-prefix KV reuse remains correctness-preserving on real backends; approximate semantic partial reuse is only enabled for the `FakeBackend` simulator.
 - **Waste-aware behaviour**: bypass decisions no longer pay reactive store cost on the same request. Long explicit scaffolds are admitted earlier to reduce cold-start misses.
 - **Visible diagnostics**: JSON summaries now preserve experimental controller metrics such as `policy_plans_total`, `policy_exact_total`, `policy_bypass_total`, `policy_net_utility_ms`, `semantic_queries_total`, and `layer_reuse_events`.
 
@@ -143,7 +148,7 @@ PYTHONPATH=src python experiments/run_benchmark.py \
   --output_dir results
 ```
 
-`--include_experimental` now runs `frequency_speculative`, `shadow_kv`, and `shadow_kv_plus`.
+`--include_experimental` now runs `frequency_speculative`, MeritKV-Sem (`shadow_kv`), and MeritKV (`shadow_kv_plus`).
 
 ### Correctness note
 

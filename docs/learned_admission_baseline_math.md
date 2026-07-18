@@ -1,5 +1,8 @@
 # Learned Admission Baseline Math
 
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 This note documents the corrected learned admission baseline used to compare against MeritKV's hand-derived per-request utility rule. The baseline is intentionally small: it does not learn a new cache system, a new semantic matcher, or a new KV execution path. It only learns the final admit/bypass decision from logged request-level features.
 
 ## High-Level Idea
@@ -265,9 +268,9 @@ Held-out Phase 3 runs both learned policies as real engines and compares them ag
 
 ```text
 no_cache
-shadow_kv              # displayed as MeritKV-Sem
-shadow_kv_plus_lite    # displayed as MeritKV-Lite
-shadow_kv_plus         # displayed as MeritKV
+shadow_kv              # MeritKV-Sem
+MeritKV-Lite (`shadow_kv_plus_lite`)
+shadow_kv_plus         # MeritKV
 ```
 
 The combined summary is:
@@ -283,7 +286,7 @@ results/learned_baseline/phase3_summary_raw.json
 results/learned_baseline/phase3_summary_utility.json
 ```
 
-`shadow_kv_plus_lite` (displayed as MeritKV-Lite) is the in-package capacity/break-even-style comparator. The important metrics are downstream system metrics, not training accuracy:
+MeritKV-Lite (`shadow_kv_plus_lite`) is the in-package capacity/break-even-style comparator. The important metrics are downstream system metrics, not training accuracy:
 
 ```text
 mean_speedup

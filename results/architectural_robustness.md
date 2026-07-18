@@ -1,5 +1,8 @@
 # Architectural Robustness: Dual-Validation Methodology
 
+Raw artifacts keep stable engine IDs: `shadow_kv_plus` displays as MeritKV, `shadow_kv` displays as MeritKV-Sem, and `shadow_kv_plus_lite` displays as MeritKV-Lite.
+
+
 ## Overview
 
 MeritKV is evaluated under two complementary regimes. The point is not to present a single best-case number, but to show how the same cache-reuse policy behaves under both controlled research conditions and more realistic execution boundaries.
@@ -73,7 +76,7 @@ It contains process-isolated JSON outputs organized by engine:
 
 ```text
 realistic_results/no_cache/...
-realistic_results/shadow_kv_plus/...
+realistic_results/shadow_kv_plus/... (MeritKV)
 ```
 
 These files are useful for checking behavior when each engine run starts from a cleaner process boundary. They should not be mixed into the controlled aggregate CSVs unless a separate aggregation script explicitly does so.
@@ -123,7 +126,7 @@ For reproducibility, the controlled results provide a stable aggregate benchmark
 ```text
 results/
   controlled_results/     # T4/P100 controlled aggregate benchmark outputs
-  realistic_results/      # Process-isolated no_cache and shadow_kv_plus outputs
+  realistic_results/      # Process-isolated no_cache and MeritKV (`shadow_kv_plus`) outputs
   fidelity_examples/      # Per-sample fidelity examples
   sweep_timing/           # Small timing smoke outputs
 ```
