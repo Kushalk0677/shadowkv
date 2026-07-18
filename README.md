@@ -1,5 +1,15 @@
 # MeritKV: Novel Per-Request Utility Decisions for KV Cache Reuse
 
+[![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](PENDING)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+MeritKV is a per-request policy controller for KV cache reuse in LLM serving. Instead of treating reuse as a yes/no prefix-cache mechanism, it asks whether reuse helps this particular request. Each candidate is scored with a net-utility objective, `U = benefit - cost - waste`, and the controller can admit reuse, bypass it, or record a semantic opportunity without blindly executing approximate KV substitution.
+
+> **Authors:** Kushal Khemani, Evan Leri, Dr. Sparsh Mittal
+
+---
+
 ## Engine Name Aliases
 
 Raw artifacts keep the stable engine IDs used during execution. Public-facing text maps them as follows:
@@ -9,16 +19,6 @@ Raw artifacts keep the stable engine IDs used during execution. Public-facing te
 | `shadow_kv_plus` | MeritKV |
 | `shadow_kv` | MeritKV-Sem |
 | `shadow_kv_plus_lite` | MeritKV-Lite |
-
-
-[![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](PENDING)
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-MeritKV is a per-request policy controller for KV cache reuse in LLM serving. Instead of treating reuse as a yes/no prefix-cache mechanism, it asks whether reuse helps this particular request. Each candidate is scored with a net-utility objective, `U = benefit - cost - waste`, and the controller can admit reuse, bypass it, or record a semantic opportunity without blindly executing approximate KV substitution.
-
-> **Authors:** Kushal Khemani, Evan Leri, Dr. Sparsh Mittal
 
 ---
 
