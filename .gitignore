@@ -43,3 +43,9 @@ p100_transfer/
 incoming_p100*/
 results_blackwell_*/
 results_p100_*/
+
+# Large local evidence trees kept on disk but not tracked
+results/learned_admission_baseline/phase3_partial/
+results/blackwell_longprefix_hf/raw_results/
+results/blackwell_longprefix_hf/extensions/*/artifact/
+runtime_experiments/gemma4/*/raw/
