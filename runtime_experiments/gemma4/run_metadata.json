@@ -1,0 +1,60 @@
+{
+  "experiment": "Gemma 4 Blackwell Runtime Results",
+  "hardware": "NVIDIA RTX PRO 6000 Blackwell (96 GB)",
+  "date_generated": "2026-07-19",
+  "models": [
+    "google/gemma-4-E2B-it",
+    "google/gemma-4-E4B-it",
+    "google/gemma-4-12B-it",
+    "google/gemma-4-26B-A4B-it",
+    "google/gemma-4-31B-it"
+  ],
+  "datasets": [
+    "ag_news",
+    "daily_dialog",
+    "dolly",
+    "samsum",
+    "xsum"
+  ],
+  "modes": [
+    "rag",
+    "templated"
+  ],
+  "seeds": [
+    42,
+    123,
+    456,
+    789,
+    999
+  ],
+  "engines": {
+    "vllm": [
+      "vllm_no_cache",
+      "vllm_apc",
+      "vllm_apc_meritkv"
+    ],
+    "sglang": [
+      "sglang_no_cache",
+      "sglang_radix_attention",
+      "sglang_radix_attention_meritkv"
+    ],
+    "lmcache": [
+      "lmcache_no_cache",
+      "lmcache",
+      "lmcache_meritkv"
+    ]
+  },
+  "measurement_protocol": {
+    "description": "Each cell measured with vLLM/SGLang/LMCache runtime on Blackwell RTX PRO 6000. 256 requests, temperature 0, one output token. NVML energy. No-cache arm disables all caching. MeritKV arm enables selective admission with semantic reuse disabled.",
+    "seeds": "5 independent runs (42, 123, 456, 789, 999) with randomized request order",
+    "energy": "NVML, idle-adjusted",
+    "request_count": 256,
+    "output_tokens": 1
+  },
+  "row_counts": {
+    "vllm": 750,
+    "sglang": 750,
+    "lmcache": 750
+  },
+  "raw_benchmark_jsons": "All 5 seeds"
+}

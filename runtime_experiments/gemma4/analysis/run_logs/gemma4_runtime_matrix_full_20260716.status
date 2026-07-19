@@ -1,7 +1,0 @@
-state=completed
-mode=full
-updated_at=2026-07-17T02:55:47-04:00
-project=/home/jade_hand/research/shadowkv/gemma4_runtime_matrix_20260716
-result_root=/home/jade_hand/research/shadowkv/gemma4_runtime_matrix_20260716/results_full
-log=/home/jade_hand/research/shadowkv/gemma4_runtime_matrix_20260716/run_logs/gemma4_runtime_matrix_full_20260716.log
-production_restored=true

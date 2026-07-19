@@ -1,21 +1,40 @@
-# Gemma 4 Runtime Experiments
+﻿# Gemma 4 Blackwell Runtime Experiments
 
-This folder contains the Gemma 4 Blackwell runtime baseline matrix from `shadowkv_gemma4_blackwell_runtime_matrix_2026-07-17.zip`.
+This folder contains measured Gemma 4 Blackwell runtime benchmark results with no-cache, native runtime-cache, and MeritKV admission-policy arms across five seeds.
 
-## Status
-
-Populated from a complete 150-cell runtime matrix: 5 Gemma 4 model variants x 5 datasets x 2 prompt modes x 3 runtime systems. Each cell used 256 requests, seed 42, temperature 0, and one output token. The archive audit reports 38,400 total requests, zero request failures, NVML energy for all cells, and runtime-native cache evidence.
-
-## Layout
+## Contents
 
 | Path | Contents |
-|---|---|
-| `vllm/` | vLLM APC curated table, raw result JSONs and metadata. |
-| `sglang/` | SGLang RadixAttention curated table, raw result JSONs and metadata. |
-| `lmcache/` | LMCache + vLLM curated table, raw result JSONs and metadata. |
-| `analysis/` | Cross-runtime aggregate tables, matched comparisons, audit, block plan, and source report. |
-| `kstar/` | Reserved for Gemma 4 k-star prefix profile results; no Gemma 4 k-star run is included in this archive. |
+|------|----------|
+| `vllm/results.csv` | Curated vLLM rows for no-cache, vLLM APC, and vLLM APC + MeritKV. |
+| `sglang/results.csv` | Curated SGLang rows for no-cache, RadixAttention, and RadixAttention + MeritKV. |
+| `lmcache/results.csv` | Curated LMCache + vLLM rows for no-cache, LMCache, and LMCache + MeritKV. |
+| `vllm/raw/full/rep_*` | Per-cell benchmark JSONs for all five seeds. |
+| `sglang/raw/full/rep_*` | Per-cell benchmark JSONs for all five seeds. |
+| `lmcache/raw/full/rep_*` | Per-cell benchmark JSONs for all five seeds. |
+| `run_metadata.json` | Hardware, model, dataset, seed, and measurement protocol metadata. |
+| `summary.md` | Cross-runtime summary and coverage notes. |
 
-## Important Scope Note
+## Models
 
-This is a runtime-baseline matrix. It compares vLLM APC, SGLang RadixAttention, and LMCache + vLLM. It does not include a no-cache arm and does not include MeritKV admission-policy results.
+Gemma 4 E2B, E4B, 12B, 26B-A4B, and 31B.
+
+## Datasets
+
+`ag_news`, `daily_dialog`, `dolly`, `samsum`, and `xsum`.
+
+## Modes
+
+`rag` and `templated`.
+
+## Seeds
+
+`42`, `123`, `456`, `789`, and `999`.
+
+## Metric Note
+
+The curated CSV column `latency_reduction_vs_no_cache_pct` is computed as:
+
+`100 * (1 - mean_latency_ms / no_cache_mean_latency_ms)`
+
+It is a latency-reduction percentage, not multiplicative throughput speedup.
